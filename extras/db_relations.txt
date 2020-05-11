@@ -1,0 +1,96 @@
+digraph D {
+	_derived_versionAncestor
+	artist
+	category
+	chart
+	chartLabel
+	chartLabelVersion
+	chartRating
+	chartRatingVersion
+	chartStepmaker
+	chartVersion
+	cut
+	difficulty
+	game
+	grade
+	label
+	language
+	mix
+	mode
+	operation
+	rating
+	search
+	song
+	songArtist
+	songBpm
+	songBpmVersion
+	songCard
+	songCardVersion
+	songCategory
+	songCategoryVersion
+	songGameIdentifier
+	songGameIdentifierVersion
+	songLabel
+	songLabelVersion
+	songTitle
+	songTitleVersion
+	songVersion
+	stepmaker
+	version
+
+	_derived_versionAncestor -> version
+	chart -> song
+	chartLabel -> chart
+	chartLabel -> label
+	chartLabelVersion -> chartLabel
+	chartLabelVersion -> version
+	chartLabelVersion -> operation
+	chartRating -> chart
+	chartRating -> mode
+	chartRating -> difficulty
+	chartRatingVersion -> chartRating
+	chartRatingVersion -> chart
+	chartRatingVersion -> version
+	chartStepmaker -> chart
+	chartStepmaker -> stepmaker
+	chartVersion -> chart
+	chartVersion -> version
+	chartVersion -> operation
+	mix -> game
+	rating -> mode
+	rating -> difficulty
+	song -> cut
+	songArtist -> song
+	songArtist -> artist
+	songBpm -> song
+	songBpmVersion -> songBpm
+	songBpmVersion -> song
+	songBpmVersion -> version
+	songCard -> song
+	songCardVersion -> songCard
+	songCardVersion -> version
+	songCardVersion -> operation
+	songCategory -> song
+	songCategory -> category
+	songCategoryVersion -> song
+	songCategoryVersion -> version
+	songGameIdentifier -> song
+	songGameIdentifierVersion -> songGameIdentifier
+	songGameIdentifierVersion -> version
+	songGameIdentifierVersion -> operation
+	songLabel -> song
+	songLabel -> label
+	songLabelVersion -> songLabel
+	songLabelVersion -> version
+	songLabelVersion -> operation
+	songTitle -> song
+	songTitle -> language
+	songTitleVersion -> songTitle
+	songTitleVersion -> song
+	songTitleVersion -> language
+	songTitleVersion -> version
+	songVersion -> song
+	songVersion -> version
+	songVersion -> operation
+	version -> mix
+}
