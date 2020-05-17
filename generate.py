@@ -1,4 +1,5 @@
 from parse_pump_out import * # Clean up later
+from parse_config import parse_config, verify_config
 
 from openpyxl import Workbook
 from openpyxl.drawing.image import Image
@@ -91,11 +92,9 @@ def write_data_sheet(ws, rows, mixes):
 	ws.column_dimensions[get_column_letter(14+m)].width = 48
 	ws.column_dimensions[get_column_letter(15+m)].width = 120
 
-	#adjust_column_widths(ws, range(1,len(headers)+1), range(2,len(rows)+2))
-
 	ws.freeze_panes = 'A2'
 
-def write_score_sheet(ws, rows, mixes):
+def write_score_sheet(ws, rows, config):
 	headers = [
 		"CID",           # A
 		"Title",         # B
@@ -106,11 +105,14 @@ def write_score_sheet(ws, rows, mixes):
 		"Grade (Pad)",   # G
 		"Miss (Pad)",    # H
 		"Comment (Pad)", # I
-		"Passed (Kbd)",  # J
-		"Grade (Kbd)",   # K
-		"Miss (Kbd)",    # L
-		"Comment (Kbd)"  # M
 	]
+	if config.keyboard:
+		headers += [
+			"Passed (Kbd)",  # J
+			"Grade (Kbd)",   # K
+			"Miss (Kbd)",    # L
+			"Comment (Kbd)"  # M
+		]
 	bold = Font(bold=True)
 	gray = PatternFill("solid", fgColor="EEEEEE")
 	dgray = PatternFill("solid", fgColor="CCCCCC")
@@ -128,7 +130,8 @@ def write_score_sheet(ws, rows, mixes):
 		ws.cell(row=i+2, column=4, value="=VLOOKUP(A%d, 'Data (Complete)'!A1:O9999, 6, FALSE)" % (i+2)).fill = gray
 		ws.cell(row=i+2, column=5, value="=VLOOKUP(A%d, 'Data (Complete)'!A1:O9999, 7, FALSE)" % (i+2)).fill = gray
 		ws.cell(row=i+2, column=5).border = right
-		ws.cell(row=i+2, column=9).border = right
+		if config.keyboard:
+			ws.cell(row=i+2, column=9).border = right
 
 	for i in range(len(rows)):
 		ws.cell(row=i+2, column=9).alignment = Alignment(horizontal='fill')
@@ -142,12 +145,11 @@ def write_score_sheet(ws, rows, mixes):
 	ws.column_dimensions['G'].width = 4
 	ws.column_dimensions['H'].width = 4
 	ws.column_dimensions['I'].width = 16
-	ws.column_dimensions['J'].width = 4
-	ws.column_dimensions['K'].width = 4
-	ws.column_dimensions['L'].width = 4
-	ws.column_dimensions['M'].width = 16
-	
-	#adjust_column_widths(ws, range(1,len(headers)+1), range(2,len(rows)+2))
+	if config.keyboard:
+		ws.column_dimensions['J'].width = 4
+		ws.column_dimensions['K'].width = 4
+		ws.column_dimensions['L'].width = 4
+		ws.column_dimensions['M'].width = 16
 
 	green = PatternFill("solid", bgColor="44FF44")
 	red = PatternFill("solid", bgColor="FF4444")
@@ -163,8 +165,9 @@ def write_score_sheet(ws, rows, mixes):
 	ws.conditional_formatting.add('F2:F9999', CellIsRule(operator='equal', formula=['"Y"'], fill=green))
 	ws.conditional_formatting.add('F2:F9999', CellIsRule(operator='equal', formula=['"N"'], fill=red))
 
-	ws.conditional_formatting.add('J2:J9999', CellIsRule(operator='equal', formula=['"Y"'], fill=green))
-	ws.conditional_formatting.add('J2:J9999', CellIsRule(operator='equal', formula=['"N"'], fill=red))
+	if config.keyboard:
+		ws.conditional_formatting.add('J2:J9999', CellIsRule(operator='equal', formula=['"Y"'], fill=green))
+		ws.conditional_formatting.add('J2:J9999', CellIsRule(operator='equal', formula=['"N"'], fill=red))
 
 	ws.conditional_formatting.add('G2:G9999', CellIsRule(operator='equal', formula=['"SSS"'], fill=grade_sss))
 	ws.conditional_formatting.add('G2:G9999', CellIsRule(operator='equal', formula=['"SS"'], fill=grade_ss))
@@ -175,29 +178,42 @@ def write_score_sheet(ws, rows, mixes):
 	ws.conditional_formatting.add('G2:G9999', CellIsRule(operator='equal', formula=['"D"'], fill=grade_d))
 	ws.conditional_formatting.add('G2:G9999', CellIsRule(operator='equal', formula=['"F"'], fill=grade_f))
 
-	ws.conditional_formatting.add('K2:K9999', CellIsRule(operator='equal', formula=['"SSS"'], fill=grade_sss))
-	ws.conditional_formatting.add('K2:K9999', CellIsRule(operator='equal', formula=['"SS"'], fill=grade_ss))
-	ws.conditional_formatting.add('K2:K9999', CellIsRule(operator='equal', formula=['"S"'], fill=grade_s))
-	ws.conditional_formatting.add('K2:K9999', CellIsRule(operator='equal', formula=['"A"'], fill=grade_a))
-	ws.conditional_formatting.add('K2:K9999', CellIsRule(operator='equal', formula=['"B"'], fill=grade_b))
-	ws.conditional_formatting.add('K2:K9999', CellIsRule(operator='equal', formula=['"C"'], fill=grade_c))
-	ws.conditional_formatting.add('K2:K9999', CellIsRule(operator='equal', formula=['"D"'], fill=grade_d))
-	ws.conditional_formatting.add('K2:K9999', CellIsRule(operator='equal', formula=['"F"'], fill=grade_f))
+	if config.keyboard:
+		ws.conditional_formatting.add('K2:K9999', CellIsRule(operator='equal', formula=['"SSS"'], fill=grade_sss))
+		ws.conditional_formatting.add('K2:K9999', CellIsRule(operator='equal', formula=['"SS"'], fill=grade_ss))
+		ws.conditional_formatting.add('K2:K9999', CellIsRule(operator='equal', formula=['"S"'], fill=grade_s))
+		ws.conditional_formatting.add('K2:K9999', CellIsRule(operator='equal', formula=['"A"'], fill=grade_a))
+		ws.conditional_formatting.add('K2:K9999', CellIsRule(operator='equal', formula=['"B"'], fill=grade_b))
+		ws.conditional_formatting.add('K2:K9999', CellIsRule(operator='equal', formula=['"C"'], fill=grade_c))
+		ws.conditional_formatting.add('K2:K9999', CellIsRule(operator='equal', formula=['"D"'], fill=grade_d))
+		ws.conditional_formatting.add('K2:K9999', CellIsRule(operator='equal', formula=['"F"'], fill=grade_f))
 
 	ws.freeze_panes = 'C2'
 
-def write_rows(xlpath, rows, dbversion, mixes_filter, mixes_all):
+def write_rows(xlpath, rows, dbversion, config, mixes_all):
 	wb = Workbook()
 	ws_scores = wb.active
 	ws_scores.title = "Scores"
 
-	mf = set(mixes_filter)
-	rows_filter = [r for r in rows if r.mixes & mf]
+	mf = set(config.mixes)
+	rows_filter = []
+	for r in rows:
+		if not (r.mixes & mf):
+			continue
+		if not (r.rating.mode_full() in config.modes):
+			continue
+		d = r.rating.difficulty
+		if d == None and not config.unrated:
+			continue
+		if d != None and (d < config.diff_min or d > config.diff_max):
+			continue
 
-	write_score_sheet(ws_scores, rows_filter, mixes_filter)
+		rows_filter.append(r)
+
+	write_score_sheet(ws_scores, rows_filter, config)
 
 	ws_dump = wb.create_sheet(title="Data")
-	write_data_sheet(ws_dump, rows_filter, mixes_filter)
+	write_data_sheet(ws_dump, rows_filter, config.mixes)
 
 	ws_dump = wb.create_sheet(title="Data (Complete)")
 	write_data_sheet(ws_dump, rows, mixes_all)
@@ -209,38 +225,33 @@ def write_rows(xlpath, rows, dbversion, mixes_filter, mixes_all):
 	ws_marker.cell(row=2, column=1, value="Sheet Generated On:").font = bold
 	ws_marker.cell(row=2, column=2, value=str(datetime.datetime.now()))
 	ws_marker.cell(row=3, column=1, value="Generator Version:").font = bold
-	ws_marker.cell(row=3, column=2, value="v0.2")
+	ws_marker.cell(row=3, column=2, value="v0.3")
 
 	ws_marker.cell(row=5, column=1, value="Player:").font = bold
-	ws_marker.cell(row=5, column=2, value="[YOUR NAME HERE]")
+	ws_marker.cell(row=5, column=2, value="[YOUR NAME HERE]").font = bold
 	ws_marker.cell(row=6, column=1, value="Mixes:").font = bold
-	ws_marker.cell(row=6, column=2, value=", ".join(mixes_filter))
-	#ws_marker.column_dimensions['A'].width = 20
-	#ws_marker.column_dimensions['B'].width = 36
+	ws_marker.cell(row=6, column=2, value=", ".join(config.mixes))
+	ws_marker.cell(row=7, column=1, value="Modes:").font = bold
+	ws_marker.cell(row=7, column=2, value=", ".join(config.modes))
+	ws_marker.cell(row=8, column=1, value="Difficulties:").font = bold
+	ws_marker.cell(row=8, column=2, value="%d-%d%s" % (config.diff_min, config.diff_max, (""," (+Unrated)")[config.unrated]))
+	ws_marker.cell(row=9, column=1, value="Options:").font = bold
+	ws_marker.cell(row=9, column=2, value="%s" % ("","+Keyboard")[config.keyboard])
 	
-	adjust_column_widths(ws_marker, range(1,2+1), range(1,6+1))
+	adjust_column_widths(ws_marker, range(1,2+1), range(1,8+1))
 	
 	wb.save(xlpath)
 	wb.close()
 
-def generate_xlsx(dbpath, xlpath, mixes_filter):
+def generate_xlsx(dbpath, xlpath, config):
 	db = read_database(dbpath)
 	rows = flatten_db(db)
 	mixes_all = list(db.mixes.values())
 	mixes_all.sort(key=lambda e: e.sortOrder)
 	mixes_all = [m.title for m in mixes_all]
-	write_rows(xlpath, rows, dbpath, mixes_filter, mixes_all)
-
-def parse_config(config_path):
-	mixes = []
-	for line in open(config_path, "rb").read().splitlines():
-		line = line.decode().strip()
-		if line.startswith("#"): continue
-		line = line.strip()
-		if line == "": continue
-		mixes.append(line)
-	return mixes
+	verify_config(config, mixes_all, db.modes)
+	write_rows(xlpath, rows, dbpath, config, mixes_all)
 
 if __name__ == '__main__':
-	mixes = parse_config("config.txt")
-	generate_xlsx(DBPATH, "output.xlsx", mixes)
+	config = parse_config("config.txt")
+	generate_xlsx(DBPATH, "output.xlsx", config)

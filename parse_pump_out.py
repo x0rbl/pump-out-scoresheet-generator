@@ -116,6 +116,9 @@ class MultipleVersionedValue:
 
 class Rating:
 	def __init__(self, mode='?', difficulty=None, path=None):
+		# TODO: Make a mode object and pass that instead of initializing with
+		# the abbreviation. This no longer makes sense now that we are
+		# filtering on mode names in the config.
 		self.mode = mode
 		self.difficulty = difficulty
 		self.path = path
@@ -257,11 +260,12 @@ class Chart:
 		self.labels.add_versions(versions)
 
 class Database:
-	def __init__(self, versions, mixes, charts, songs):
+	def __init__(self, versions, mixes, charts, songs, modes):
 		self.versions = versions
 		self.mixes = mixes
 		self.charts = charts
 		self.songs = songs
+		self.modes = modes
 
 class Entry:
 	def __init__(self):
@@ -487,7 +491,16 @@ def read_database(dbpath):
 	for songId, path, versionId, operation in c.fetchall():
 		songs[songId].card.add(versionId, operation, path)
 
-	return Database(versions, mixes, charts, songs)
+	### Get list of mode names
+	c.execute('''
+		SELECT mode.internalTitle
+		FROM mode
+	''')
+	modes = set()
+	for mode in c.fetchall():
+		modes.add(mode[0])
+
+	return Database(versions, mixes, charts, songs, modes)
 
 def make_entry(db, chart):
 	e = Entry()

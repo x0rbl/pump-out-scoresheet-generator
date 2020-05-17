@@ -1,13 +1,16 @@
-# The following section specifies which charts to include in the spreadsheet.
+# This configuration file specifies which charts to include in the spreadsheet.
+# Follow the instructions for each section and save your changes when done.
 #
+
+
+[Mixes]
+
 # If a mix listed below is uncommented, all charts that appeared in that mix
-# will appear in the score sheet, including songs that were carried forward
-# from previous mixes.  For example, if you leave XX uncommented the score
-# sheet will contain entries for each chart of the song Dignity, since those
-# charts were playable in XX.
+# will appear in the score sheet, including charts that were introduced in
+# previous mixes.
 #
 # If you do NOT want to include a mix, comment it out by prefixing it with the
-# hash character (#).  Remember to save the file when you are done.
+# hash character (#).
 #
 # In most cases you will probably only want to have one mix uncommented unless
 # you regularly play more than one mix.
@@ -44,3 +47,53 @@
 #Prime JE
 #Prime 2
 XX
+
+
+
+[Modes]
+
+# Similar to above, if you do NOT want the score sheet to include charts from a
+# particular mode, then comment it out by prefixing it with the hash character.
+#
+# Otherwise leave them uncommented.
+#
+# Do NOT change the spelling or punctuation of the modes, as they must exactly
+# match the mode titles in the Pump Out database (column `mode.internalTitle`).
+#
+
+Single
+Double
+Single Performance
+Double Performance
+#Co-Op
+#Routine
+Half-Double
+
+
+
+[Difficulties]
+
+# Set these three options as follows:
+#
+# Min: The lowest chart rating to be included
+# Max: The highest chart rating to be included
+# IncludeUnrated: Set to 1 to include charts without a numerical rating;
+# otherwise, set this option to 0.
+#
+# Note that for Co-Op charts, the difficulty is the number of players intended
+# for the chart.
+#
+
+Min=1
+Max=28
+IncludeUnrated=0
+
+
+
+[Misc]
+
+# Set IncludeKbd to 1 to include a duplicate set of score-tracking columns for
+# recording keyboard scores.  Otherwise set it to 0.
+#
+
+IncludeKbd=0
