@@ -14,6 +14,7 @@ class Config:
 		self.diff_min = 1
 		self.diff_max = 30
 		self.unrated = True
+		self.pad = True
 		self.keyboard = True
 
 def parse_config(config_path):
@@ -54,7 +55,9 @@ def parse_config(config_path):
 			else:
 				raise ConfigError("unsupported option in [Difficulties] section: %s" % line)
 		elif section == SECTION_MISC:
-			if line.startswith("IncludeKbd="):
+			if line.startswith("IncludePad="):
+				config.pad = int(line[len("IncludePad="):]) != 0
+			elif line.startswith("IncludeKbd="):
 				config.keyboard = int(line[len("IncludeKbd="):]) != 0
 			else:
 				raise ConfigError("unsupported option in [Misc] section: %s" % line)

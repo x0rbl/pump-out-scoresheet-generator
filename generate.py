@@ -95,66 +95,95 @@ def write_data_sheet(ws, rows, mixes):
 	ws.freeze_panes = 'A2'
 
 def write_score_sheet(ws, rows, config):
+	mixes = config.mixes
+	if len(mixes) == 1:
+		mixes = []
+
 	headers = [
 		"CID",           # A
 		"Title",         # B
 		"Cut",           # C
 		"Mode",          # D
 		"Difficulty",    # E
-		"Passed (Pad)",  # F
-		"Grade (Pad)",   # G
-		"Miss (Pad)",    # H
-		"Comment (Pad)", # I
 	]
+	if config.pad:
+		headers += [
+			"Passed (Pad)",  # F
+			"Grade (Pad)",   # G
+			"Miss (Pad)",    # H
+			"Comment (Pad)", # I
+		]
 	if config.keyboard:
 		headers += [
-			"Passed (Kbd)",  # J
-			"Grade (Kbd)",   # K
-			"Miss (Kbd)",    # L
-			"Comment (Kbd)"  # M
+			"Passed (Kbd)",  # F J
+			"Grade (Kbd)",   # G K
+			"Miss (Kbd)",    # H L
+			"Comment (Kbd)"  # I M
 		]
+	headers += mixes # F J N
 	bold = Font(bold=True)
 	gray = PatternFill("solid", fgColor="EEEEEE")
 	dgray = PatternFill("solid", fgColor="CCCCCC")
-	bottom = Border(bottom=Side(style="thick"))
-	right = Border(right=Side(style="thick"))
+
+	mix_col = 6
+	border_cols = [5]
+	if config.pad or config.keyboard:
+		mix_col = 10
+		border_cols += [9]
+	if config.pad and config.keyboard:
+		mix_col = 14
+		border_cols += [13]
+
 	for i in range(len(headers)):
+		right = None
+		#if i+1 == len(headers):
+	#		right = Side(style="thin")
 		c = ws.cell(row=1, column=i+1, value=headers[i])
 		c.font = bold
 		c.fill = dgray
-		c.border = bottom
+		c.border = Border(bottom=Side(style="thick"), right=right)
 	for i in range(len(rows)):
 		ws.cell(row=i+2, column=1, value=rows[i].cid).fill = dgray
 		ws.cell(row=i+2, column=2, value="=VLOOKUP(A%d, 'Data (Complete)'!A1:O9999, 4, FALSE)" % (i+2)).fill = gray
 		ws.cell(row=i+2, column=3, value="=VLOOKUP(A%d, 'Data (Complete)'!A1:O9999, 5, FALSE)" % (i+2)).fill = gray
 		ws.cell(row=i+2, column=4, value="=VLOOKUP(A%d, 'Data (Complete)'!A1:O9999, 6, FALSE)" % (i+2)).fill = gray
 		ws.cell(row=i+2, column=5, value="=VLOOKUP(A%d, 'Data (Complete)'!A1:O9999, 7, FALSE)" % (i+2)).fill = gray
-		ws.cell(row=i+2, column=5).border = right
-		if config.keyboard:
-			ws.cell(row=i+2, column=9).border = right
+		for j in range(len(mixes)):
+			ws.cell(row=i+2, column=mix_col+j, value="NY"[mixes[j] in rows[i].mixes]).fill = gray
 
 	for i in range(len(rows)):
 		ws.cell(row=i+2, column=9).alignment = Alignment(horizontal='fill')
 
-	thin = Border(bottom=Side(style="thin", color="888888"))
 	for c in range(len(headers)):
 		for r in range(len(rows)-1):
-			ws.cell(row=r+2, column=c+1).border = thin
+			right = None
+			if c+1 == len(headers):
+				right = Side(style="thin")
+			if c+1 in border_cols:
+				right = Side(style="thick")
+			border = Border(bottom=Side(style="thin", color="888888"), right=right)
+			ws.cell(row=r+2, column=c+1).border = border
 
 	ws.column_dimensions['A'].width = 5
 	ws.column_dimensions['B'].width = 30
 	ws.column_dimensions['C'].width = 9
 	ws.column_dimensions['D'].width = 9
 	ws.column_dimensions['E'].width = 3
-	ws.column_dimensions['F'].width = 4
-	ws.column_dimensions['G'].width = 4
-	ws.column_dimensions['H'].width = 4
-	ws.column_dimensions['I'].width = 16
+	c = 6
+	if config.pad:
+		ws.column_dimensions[get_column_letter(c+0)].width = 4
+		ws.column_dimensions[get_column_letter(c+1)].width = 4
+		ws.column_dimensions[get_column_letter(c+2)].width = 4
+		ws.column_dimensions[get_column_letter(c+3)].width = 20
+		c += 4
 	if config.keyboard:
-		ws.column_dimensions['J'].width = 4
-		ws.column_dimensions['K'].width = 4
-		ws.column_dimensions['L'].width = 4
-		ws.column_dimensions['M'].width = 16
+		ws.column_dimensions[get_column_letter(c+0)].width = 4
+		ws.column_dimensions[get_column_letter(c+1)].width = 4
+		ws.column_dimensions[get_column_letter(c+2)].width = 4
+		ws.column_dimensions[get_column_letter(c+3)].width = 20
+		c += 4
+	for i in range(len(mixes)):
+		ws.column_dimensions[get_column_letter(c+i)].width = 2
 
 	green = PatternFill("solid", bgColor="44FF44")
 	red = PatternFill("solid", bgColor="FF4444")
@@ -164,26 +193,28 @@ def write_score_sheet(ws, rows, config):
 	grade_b = PatternFill("solid", bgColor="888888")
 	grade_a = PatternFill("solid", bgColor="AAAAAA")
 	grade_s = PatternFill("solid", bgColor="DD88FF")
-	grade_ss = PatternFill("solid", bgColor="FFFF00")
+	grade_ss = PatternFill("solid", bgColor="FFEE00")
 	grade_sss = PatternFill("solid", bgColor="44FF44")
 
-	ws.conditional_formatting.add('F2:F9999', CellIsRule(operator='equal', formula=['"Y"'], fill=green))
-	ws.conditional_formatting.add('F2:F9999', CellIsRule(operator='equal', formula=['"N"'], fill=red))
+	if config.pad or config.keyboard:
+		ws.conditional_formatting.add('F2:F9999', CellIsRule(operator='equal', formula=['"Y"'], fill=green))
+		ws.conditional_formatting.add('F2:F9999', CellIsRule(operator='equal', formula=['"N"'], fill=red))
 
-	if config.keyboard:
+	if config.pad and config.keyboard:
 		ws.conditional_formatting.add('J2:J9999', CellIsRule(operator='equal', formula=['"Y"'], fill=green))
 		ws.conditional_formatting.add('J2:J9999', CellIsRule(operator='equal', formula=['"N"'], fill=red))
 
-	ws.conditional_formatting.add('G2:G9999', CellIsRule(operator='equal', formula=['"SSS"'], fill=grade_sss))
-	ws.conditional_formatting.add('G2:G9999', CellIsRule(operator='equal', formula=['"SS"'], fill=grade_ss))
-	ws.conditional_formatting.add('G2:G9999', CellIsRule(operator='equal', formula=['"S"'], fill=grade_s))
-	ws.conditional_formatting.add('G2:G9999', CellIsRule(operator='equal', formula=['"A"'], fill=grade_a))
-	ws.conditional_formatting.add('G2:G9999', CellIsRule(operator='equal', formula=['"B"'], fill=grade_b))
-	ws.conditional_formatting.add('G2:G9999', CellIsRule(operator='equal', formula=['"C"'], fill=grade_c))
-	ws.conditional_formatting.add('G2:G9999', CellIsRule(operator='equal', formula=['"D"'], fill=grade_d))
-	ws.conditional_formatting.add('G2:G9999', CellIsRule(operator='equal', formula=['"F"'], fill=grade_f))
+	if config.pad or config.keyboard:
+		ws.conditional_formatting.add('G2:G9999', CellIsRule(operator='equal', formula=['"SSS"'], fill=grade_sss))
+		ws.conditional_formatting.add('G2:G9999', CellIsRule(operator='equal', formula=['"SS"'], fill=grade_ss))
+		ws.conditional_formatting.add('G2:G9999', CellIsRule(operator='equal', formula=['"S"'], fill=grade_s))
+		ws.conditional_formatting.add('G2:G9999', CellIsRule(operator='equal', formula=['"A"'], fill=grade_a))
+		ws.conditional_formatting.add('G2:G9999', CellIsRule(operator='equal', formula=['"B"'], fill=grade_b))
+		ws.conditional_formatting.add('G2:G9999', CellIsRule(operator='equal', formula=['"C"'], fill=grade_c))
+		ws.conditional_formatting.add('G2:G9999', CellIsRule(operator='equal', formula=['"D"'], fill=grade_d))
+		ws.conditional_formatting.add('G2:G9999', CellIsRule(operator='equal', formula=['"F"'], fill=grade_f))
 
-	if config.keyboard:
+	if config.pad and config.keyboard:
 		ws.conditional_formatting.add('K2:K9999', CellIsRule(operator='equal', formula=['"SSS"'], fill=grade_sss))
 		ws.conditional_formatting.add('K2:K9999', CellIsRule(operator='equal', formula=['"SS"'], fill=grade_ss))
 		ws.conditional_formatting.add('K2:K9999', CellIsRule(operator='equal', formula=['"S"'], fill=grade_s))
@@ -223,6 +254,10 @@ def write_rows(xlpath, rows, dbversion, config, mixes_all):
 	ws_dump = wb.create_sheet(title="Data (Complete)")
 	write_data_sheet(ws_dump, rows, mixes_all)
 
+	options = []
+	if config.pad: options += ["+Pad"]
+	if config.keyboard: options += ["+Keyboard"]
+
 	bold = Font(bold=True)
 	ws_marker = wb.create_sheet(title="About")
 	ws_marker.cell(row=1, column=1, value="Database Name:").font = bold
@@ -241,7 +276,7 @@ def write_rows(xlpath, rows, dbversion, config, mixes_all):
 	ws_marker.cell(row=8, column=1, value="Difficulties:").font = bold
 	ws_marker.cell(row=8, column=2, value="%d-%d%s" % (config.diff_min, config.diff_max, (""," (+Unrated)")[config.unrated]))
 	ws_marker.cell(row=9, column=1, value="Options:").font = bold
-	ws_marker.cell(row=9, column=2, value="%s" % ("","+Keyboard")[config.keyboard])
+	ws_marker.cell(row=9, column=2, value="%s" % ", ".join(options))
 	
 	adjust_column_widths(ws_marker, range(1,2+1), range(1,8+1))
 	

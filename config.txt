@@ -92,8 +92,12 @@ IncludeUnrated=0
 
 [Misc]
 
+# Set IncludePad to 1 to include a set of score-tracking columns for recording
+# pad-based scores.  Otherwise set it to 0.
+#
 # Set IncludeKbd to 1 to include a duplicate set of score-tracking columns for
 # recording keyboard scores.  Otherwise set it to 0.
 #
 
+IncludePad=1
 IncludeKbd=0
