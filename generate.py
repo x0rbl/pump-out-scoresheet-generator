@@ -32,9 +32,9 @@ def write_data_sheet(ws, rows, mixes):
 		"SID", # B
 		"GID", # C
 		"Title", # D
-		"Mode", # E
-		"Difficulty", # F
-		"Cut", # G
+		"Cut", # E
+		"Mode", # F
+		"Difficulty", # G
 		"First Seen", # H
 		"Last Seen", # I
 		"BPM", # J
@@ -60,9 +60,9 @@ def write_data_sheet(ws, rows, mixes):
 		ws.cell(row=i+2, column=2, value=rows[i].sid)
 		ws.cell(row=i+2, column=3, value=rows[i].gameIdentifier)
 		ws.cell(row=i+2, column=4, value=rows[i].title)
-		ws.cell(row=i+2, column=5, value=rows[i].rating.mode_full())
-		ws.cell(row=i+2, column=6, value=rows[i].rating.difficulty_str())
-		ws.cell(row=i+2, column=7, value=str(rows[i].cut))
+		ws.cell(row=i+2, column=5, value=str(rows[i].cut))
+		ws.cell(row=i+2, column=6, value=rows[i].rating.mode_full())
+		ws.cell(row=i+2, column=7, value=rows[i].rating.difficulty_str())
 		ws.cell(row=i+2, column=8, value=first_seen)
 		ws.cell(row=i+2, column=9, value=last_seen)
 		ws.cell(row=i+2, column=10, value=str(rows[i].bpm))
@@ -79,8 +79,8 @@ def write_data_sheet(ws, rows, mixes):
 	ws.column_dimensions['C'].width = 5
 	ws.column_dimensions['D'].width = 36
 	ws.column_dimensions['E'].width = 9
-	ws.column_dimensions['F'].width = 3
-	ws.column_dimensions['G'].width = 9
+	ws.column_dimensions['F'].width = 9
+	ws.column_dimensions['G'].width = 3
 	ws.column_dimensions['H'].width = 17
 	ws.column_dimensions['I'].width = 17
 	ws.column_dimensions['J'].width = 8
@@ -98,9 +98,9 @@ def write_score_sheet(ws, rows, config):
 	headers = [
 		"CID",           # A
 		"Title",         # B
-		"Mode",          # C
-		"Difficulty",    # D
-		"Cut",           # E
+		"Cut",           # C
+		"Mode",          # D
+		"Difficulty",    # E
 		"Passed (Pad)",  # F
 		"Grade (Pad)",   # G
 		"Miss (Pad)",    # H
@@ -136,11 +136,16 @@ def write_score_sheet(ws, rows, config):
 	for i in range(len(rows)):
 		ws.cell(row=i+2, column=9).alignment = Alignment(horizontal='fill')
 
+	thin = Border(bottom=Side(style="thin", color="888888"))
+	for c in range(len(headers)):
+		for r in range(len(rows)-1):
+			ws.cell(row=r+2, column=c+1).border = thin
+
 	ws.column_dimensions['A'].width = 5
 	ws.column_dimensions['B'].width = 30
 	ws.column_dimensions['C'].width = 9
-	ws.column_dimensions['D'].width = 3
-	ws.column_dimensions['E'].width = 9
+	ws.column_dimensions['D'].width = 9
+	ws.column_dimensions['E'].width = 3
 	ws.column_dimensions['F'].width = 4
 	ws.column_dimensions['G'].width = 4
 	ws.column_dimensions['H'].width = 4
@@ -220,12 +225,12 @@ def write_rows(xlpath, rows, dbversion, config, mixes_all):
 
 	bold = Font(bold=True)
 	ws_marker = wb.create_sheet(title="About")
-	ws_marker.cell(row=1, column=1, value="Database Version:").font = bold
+	ws_marker.cell(row=1, column=1, value="Database Name:").font = bold
 	ws_marker.cell(row=1, column=2, value=dbversion)
 	ws_marker.cell(row=2, column=1, value="Sheet Generated On:").font = bold
 	ws_marker.cell(row=2, column=2, value=str(datetime.datetime.now()))
 	ws_marker.cell(row=3, column=1, value="Generator Version:").font = bold
-	ws_marker.cell(row=3, column=2, value="v0.3")
+	ws_marker.cell(row=3, column=2, value="v0.4")
 
 	ws_marker.cell(row=5, column=1, value="Player:").font = bold
 	ws_marker.cell(row=5, column=2, value="[YOUR NAME HERE]").font = bold
