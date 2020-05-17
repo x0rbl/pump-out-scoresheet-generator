@@ -1,0 +1,46 @@
+# The following section specifies which charts to include in the spreadsheet.
+#
+# If a mix listed below is uncommented, all charts that appeared in that mix
+# will appear in the score sheet, including songs that were carried forward
+# from previous mixes.  For example, if you leave XX uncommented the score
+# sheet will contain entries for each chart of the song Dignity, since those
+# charts were playable in XX.
+#
+# If you do NOT want to include a mix, comment it out by prefixing it with the
+# hash character (#).  Remember to save the file when you are done.
+#
+# In most cases you will probably only want to have one mix uncommented unless
+# you regularly play more than one mix.
+#
+# Do NOT change the spelling or punctuation of the mixes, as they must exactly
+# match the mix titles in the Pump Out database (column `mix.internalTitle`).
+#
+
+#The 1st Dance Floor
+#2nd Ultimate Remix
+#3rd O.B.G
+#The O.B.G / Season Evolution
+#The Collection
+#The Perfect Collection
+#Extra
+#The Premiere
+#The Prex
+#The Rebirth
+#The Premiere 2
+#The Prex 2
+#The Premiere 3
+#The Prex 3
+#Exceed
+#Exceed 2
+#Zero
+#NX / New Xenesis
+#NX2 / Next Xenesis
+#NX Absolute
+#Fiesta
+#Fiesta EX
+#Fiesta 2
+#Infinity
+#Prime
+#Prime JE
+#Prime 2
+XX
