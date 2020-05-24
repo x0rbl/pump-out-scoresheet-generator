@@ -335,23 +335,25 @@ def generate_xlsx(dbpath, xlpath, config):
 	ws_marker = wb.create_sheet(title="About")
 	ws_marker.cell(row=1, column=1, value="Database Name:").font = bold
 	ws_marker.cell(row=1, column=2, value=dbpath)
-	ws_marker.cell(row=2, column=1, value="Sheet Generated On:").font = bold
-	ws_marker.cell(row=2, column=2, value=str(datetime.datetime.now()))
-	ws_marker.cell(row=3, column=1, value="Generator Version:").font = bold
-	ws_marker.cell(row=3, column=2, value="v0.5")
+	ws_marker.cell(row=2, column=1, value="Latest Mix in Database:").font = bold
+	ws_marker.cell(row=2, column=2, value=db.version_title(db.latest_version()))
+	ws_marker.cell(row=3, column=1, value="Sheet Generated On:").font = bold
+	ws_marker.cell(row=3, column=2, value=str(datetime.datetime.now()))
+	ws_marker.cell(row=4, column=1, value="Generator Version:").font = bold
+	ws_marker.cell(row=4, column=2, value="v0.5")
 
-	ws_marker.cell(row=5, column=1, value="Player:").font = bold
-	ws_marker.cell(row=5, column=2, value="[YOUR NAME HERE]").font = bold
-	ws_marker.cell(row=6, column=1, value="Mixes:").font = bold
-	ws_marker.cell(row=6, column=2, value=", ".join(config.mixes))
-	ws_marker.cell(row=7, column=1, value="Modes:").font = bold
-	ws_marker.cell(row=7, column=2, value=", ".join(config.modes))
-	ws_marker.cell(row=8, column=1, value="Difficulties:").font = bold
-	ws_marker.cell(row=8, column=2, value="%d-%d%s" % (config.diff_min, config.diff_max, (""," (+Unrated)")[config.unrated]))
-	ws_marker.cell(row=9, column=1, value="Options:").font = bold
-	ws_marker.cell(row=9, column=2, value="%s" % ", ".join(options))
+	ws_marker.cell(row=6, column=1, value="Player:").font = bold
+	ws_marker.cell(row=6, column=2, value="[YOUR NAME HERE]").font = bold
+	ws_marker.cell(row=7, column=1, value="Mixes:").font = bold
+	ws_marker.cell(row=7, column=2, value=", ".join(config.mixes))
+	ws_marker.cell(row=8, column=1, value="Modes:").font = bold
+	ws_marker.cell(row=8, column=2, value=", ".join(config.modes))
+	ws_marker.cell(row=9, column=1, value="Difficulties:").font = bold
+	ws_marker.cell(row=9, column=2, value="%d-%d%s" % (config.diff_min, config.diff_max, (""," (+Unrated)")[config.unrated]))
+	ws_marker.cell(row=10, column=1, value="Options:").font = bold
+	ws_marker.cell(row=10, column=2, value="%s" % ", ".join(options))
 	
-	adjust_column_widths(ws_marker, range(1,2+1), range(1,8+1))
+	adjust_column_widths(ws_marker, range(1,2+1), range(1,10+1))
 
 	print("Saving workbook...")
 	wb.save(xlpath)
