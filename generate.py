@@ -1,5 +1,5 @@
-from parse_pump_out import * # Clean up later
-from parse_config import parse_config, verify_config
+from parse_pump_out2 import read_database
+from parse_config import parse_config, titles_to_ids, config_all
 
 from openpyxl import Workbook
 from openpyxl.drawing.image import Image
@@ -8,7 +8,7 @@ from openpyxl.styles import Font, PatternFill
 from openpyxl.styles.alignment import Alignment
 from openpyxl.styles.borders import Border, Side
 from openpyxl.styles.differential import DifferentialStyle
-from openpyxl.utils import get_column_letter
+from openpyxl.utils import get_column_letter as gcl
 
 import datetime
 import sys
@@ -24,9 +24,25 @@ def adjust_column_widths(ws, cols, rows):
 			val = ws.cell(row=r, column=c).value
 			if val == None: continue
 			width = max(width, len(str(val)))
-		ws.column_dimensions[get_column_letter(c)].width = width + 1
+		ws.column_dimensions[gcl(c)].width = width + 1
 
-def write_data_sheet(ws, rows, mixes):
+def write_data_sheet(ws, db, chart_set, config):
+	if chart_set == None:
+		chart_set = set(db.charts)
+	if config == None:
+		config = config_all(db)
+
+	latest_filtered_mix = -1
+	for mid in config.mix_ids:
+		if latest_filtered_mix == -1:
+			latest_filtered_mix = mid
+		elif db.mixes[mid].order > db.mixes[latest_filtered_mix].order:
+			latest_filtered_mix = mid
+	fver = db.newest_version_from_mix(latest_filtered_mix)
+
+	charts = list(chart_set)
+	charts.sort(key=lambda cid: db.chart_sort_key(cid, fver, down=True))
+
 	headers = [
 		"CID", # A
 		"SID", # B
@@ -41,38 +57,46 @@ def write_data_sheet(ws, rows, mixes):
 		"Category", # K
 		"Stepmaker", # L
 	]
-	headers += mixes
+	headers += config.mixes
 	headers += [
 		"Labels",
 		"Card",
 		"Comment"
 	]
-	m = len(mixes)
+	m = len(config.mixes)
 	for i in range(len(headers)):
 		ws.cell(row=1, column=i+1, value=headers[i]).font = Font(bold=True)
-	for i in range(len(rows)):
+	for i, cid in enumerate(charts):
+		sid = db.charts[cid].songId
+
+		game_id = db.song_game_id(sid, fver)
+		if game_id == None: game_id = ""
+
 		first_seen = last_seen = "???"
-		if rows[i].first_seen != None:
-			first_seen = str(rows[i].first_seen)
-		if rows[i].last_seen != None:
-			last_seen = str(rows[i].last_seen)
-		ws.cell(row=i+2, column=1, value=rows[i].cid)
-		ws.cell(row=i+2, column=2, value=rows[i].sid)
-		ws.cell(row=i+2, column=3, value=rows[i].gameIdentifier)
-		ws.cell(row=i+2, column=4, value=rows[i].title)
-		ws.cell(row=i+2, column=5, value=str(rows[i].cut))
-		ws.cell(row=i+2, column=6, value=rows[i].rating.mode_full())
-		ws.cell(row=i+2, column=7, value=rows[i].rating.difficulty_str())
+		vid = db.chart_introduced(cid)
+		if vid != None:
+			first_seen = db.version_title(vid)
+		vid = db.chart_last_seen(cid)
+		if vid != None:
+			last_seen = db.version_title(vid)
+
+		ws.cell(row=i+2, column=1, value=cid)
+		ws.cell(row=i+2, column=2, value=sid)
+		ws.cell(row=i+2, column=3, value=game_id)
+		ws.cell(row=i+2, column=4, value=db.song_title(sid, fver))
+		ws.cell(row=i+2, column=5, value=db.song_cut_str(sid))
+		ws.cell(row=i+2, column=6, value=db.chart_mode_str(cid, fver))
+		ws.cell(row=i+2, column=7, value=db.chart_difficulty_str(cid, fver))
 		ws.cell(row=i+2, column=8, value=first_seen)
 		ws.cell(row=i+2, column=9, value=last_seen)
-		ws.cell(row=i+2, column=10, value=str(rows[i].bpm))
-		ws.cell(row=i+2, column=11, value=rows[i].category)
-		ws.cell(row=i+2, column=12, value=str(rows[i].stepmaker))
-		for j in range(m):
-			ws.cell(row=i+2, column=13+j, value="NY"[set([mixes[j]]) & rows[i].mixes != set()])
-		ws.cell(row=i+2, column=13+m, value=",".join(rows[i].labels))
-		ws.cell(row=i+2, column=14+m, value=rows[i].card)
-		ws.cell(row=i+2, column=15+m, value=rows[i].comment)
+		ws.cell(row=i+2, column=10, value=db.song_bpm_str(sid, fver))
+		ws.cell(row=i+2, column=11, value=db.song_category(sid, fver))
+		ws.cell(row=i+2, column=12, value=str(db.chart_stepmaker(cid)))
+		for j, mid in enumerate(config.mix_ids):
+			ws.cell(row=i+2, column=13+j, value="NY"[db.chart_in_mix(cid, mid)])
+		ws.cell(row=i+2, column=13+m, value=",".join(db.chart_labels(cid, fver)))
+		ws.cell(row=i+2, column=14+m, value=db.song_card(sid, fver))
+		ws.cell(row=i+2, column=15+m, value=db.song_comment(sid, fver))
 
 	ws.column_dimensions['A'].width = 5
 	ws.column_dimensions['B'].width = 5
@@ -87,15 +111,26 @@ def write_data_sheet(ws, rows, mixes):
 	ws.column_dimensions['K'].width = 14
 	ws.column_dimensions['L'].width = 31
 	for i in range(m):
-		ws.column_dimensions[get_column_letter(13+i)].width = 2
-	ws.column_dimensions[get_column_letter(13+m)].width = 39
-	ws.column_dimensions[get_column_letter(14+m)].width = 48
-	ws.column_dimensions[get_column_letter(15+m)].width = 120
+		ws.column_dimensions[gcl(13+i)].width = 2
+	ws.column_dimensions[gcl(13+m)].width = 39
+	ws.column_dimensions[gcl(14+m)].width = 48
+	ws.column_dimensions[gcl(15+m)].width = 120
 
 	ws.freeze_panes = 'A2'
 
-def write_score_sheet(ws, rows, config):
-	mixes = config.mixes
+def write_score_sheet(ws, db, chart_set, config, mixId):
+	latest_filtered_mix = -1
+	for mid in config.mix_ids:
+		if latest_filtered_mix == -1:
+			latest_filtered_mix = mid
+		elif db.mixes[mid].order > db.mixes[latest_filtered_mix].order:
+			latest_filtered_mix = mid
+	fver = db.newest_version_from_mix(latest_filtered_mix)
+
+	charts = list(chart_set)
+	charts.sort(key=lambda cid: db.chart_sort_key(cid, fver, down=True))
+
+	mixes = config.mix_ids
 	if len(mixes) == 1:
 		mixes = []
 
@@ -120,7 +155,7 @@ def write_score_sheet(ws, rows, config):
 			"Miss (Kbd)",    # H L
 			"Comment (Kbd)"  # I M
 		]
-	headers += mixes # F J N
+	headers += [db.mixes[m].title for m in mixes] # F J N
 	bold = Font(bold=True)
 	gray = PatternFill("solid", fgColor="EEEEEE")
 	dgray = PatternFill("solid", fgColor="CCCCCC")
@@ -136,26 +171,24 @@ def write_score_sheet(ws, rows, config):
 
 	for i in range(len(headers)):
 		right = None
-		#if i+1 == len(headers):
-	#		right = Side(style="thin")
 		c = ws.cell(row=1, column=i+1, value=headers[i])
 		c.font = bold
 		c.fill = dgray
 		c.border = Border(bottom=Side(style="thick"), right=right)
-	for i in range(len(rows)):
-		ws.cell(row=i+2, column=1, value=rows[i].cid).fill = dgray
+	for i, cid in enumerate(charts):
+		ws.cell(row=i+2, column=1, value=cid).fill = dgray
 		ws.cell(row=i+2, column=2, value="=VLOOKUP(A%d, 'Data (Complete)'!A1:O9999, 4, FALSE)" % (i+2)).fill = gray
 		ws.cell(row=i+2, column=3, value="=VLOOKUP(A%d, 'Data (Complete)'!A1:O9999, 5, FALSE)" % (i+2)).fill = gray
 		ws.cell(row=i+2, column=4, value="=VLOOKUP(A%d, 'Data (Complete)'!A1:O9999, 6, FALSE)" % (i+2)).fill = gray
 		ws.cell(row=i+2, column=5, value="=VLOOKUP(A%d, 'Data (Complete)'!A1:O9999, 7, FALSE)" % (i+2)).fill = gray
-		for j in range(len(mixes)):
-			ws.cell(row=i+2, column=mix_col+j, value="NY"[mixes[j] in rows[i].mixes]).fill = gray
+		for j, mid in enumerate(mixes):
+			ws.cell(row=i+2, column=mix_col+j, value="NY"[db.chart_in_mix(cid, mid)]).fill = gray
 
-	for i in range(len(rows)):
+	for i in range(len(charts)):
 		ws.cell(row=i+2, column=9).alignment = Alignment(horizontal='fill')
 
 	for c in range(len(headers)):
-		for r in range(len(rows)-1):
+		for r in range(len(charts)):
 			right = None
 			if c+1 == len(headers):
 				right = Side(style="thin")
@@ -171,19 +204,19 @@ def write_score_sheet(ws, rows, config):
 	ws.column_dimensions['E'].width = 3
 	c = 6
 	if config.pad:
-		ws.column_dimensions[get_column_letter(c+0)].width = 4
-		ws.column_dimensions[get_column_letter(c+1)].width = 4
-		ws.column_dimensions[get_column_letter(c+2)].width = 4
-		ws.column_dimensions[get_column_letter(c+3)].width = 20
+		ws.column_dimensions[gcl(c+0)].width = 4
+		ws.column_dimensions[gcl(c+1)].width = 4
+		ws.column_dimensions[gcl(c+2)].width = 4
+		ws.column_dimensions[gcl(c+3)].width = 20
 		c += 4
 	if config.keyboard:
-		ws.column_dimensions[get_column_letter(c+0)].width = 4
-		ws.column_dimensions[get_column_letter(c+1)].width = 4
-		ws.column_dimensions[get_column_letter(c+2)].width = 4
-		ws.column_dimensions[get_column_letter(c+3)].width = 20
+		ws.column_dimensions[gcl(c+0)].width = 4
+		ws.column_dimensions[gcl(c+1)].width = 4
+		ws.column_dimensions[gcl(c+2)].width = 4
+		ws.column_dimensions[gcl(c+3)].width = 20
 		c += 4
 	for i in range(len(mixes)):
-		ws.column_dimensions[get_column_letter(c+i)].width = 2
+		ws.column_dimensions[gcl(c+i)].width = 2
 
 	green = PatternFill("solid", bgColor="44FF44")
 	red = PatternFill("solid", bgColor="FF4444")
@@ -226,34 +259,74 @@ def write_score_sheet(ws, rows, config):
 
 	ws.freeze_panes = 'C2'
 
-def write_rows(xlpath, rows, dbversion, config, mixes_all):
+def write_summary_sheet(ws_summary, db, charts, config, mid, is_pad):
+	raise Exception("unimplemented")
+
+def generate_xlsx(dbpath, xlpath, config):
+	print("Reading database file...")
+	db = read_database(dbpath)
+
+	config.mix_ids = titles_to_ids(config.mixes, db.mixes, "mix")
+	config.mode_ids = titles_to_ids(config.modes, db.modes, "mode")
+
+	mix_to_charts = {}
+	all_filtered_charts = set()
+	for mid in config.mix_ids:
+		charts = set()
+		for cid in db.charts.keys():
+			ver = db.chart_version_in_mix(cid, mid)
+			if ver != None:
+				rating = db.chart_rating(cid, ver)
+				if rating.mode in config.mode_ids:
+					diff = rating.difficulty
+					if diff == None and config.unrated:
+						charts.add(cid)
+						continue
+					if diff != None and (diff >= config.diff_min and diff <= config.diff_max):
+						charts.add(cid)
+						continue
+		mix_to_charts[mid] = charts
+		all_filtered_charts |= charts
+
+	latest_filtered_mix = -1
+	latest_mix = -1
+	for mid in db.mixes:
+		if latest_mix == -1:
+			latest_mix = mid
+		elif db.mixes[mid].order > db.mixes[latest_mix].order:
+			latest_mix = mid
+	for mid in config.mix_ids:
+		if latest_filtered_mix == -1:
+			latest_filtered_mix = mid
+		elif db.mixes[mid].order > db.mixes[latest_filtered_mix].order:
+			latest_filtered_mix = mid
+
+	print("Creating score sheet...")
 	wb = Workbook()
 	ws_scores = wb.active
 	ws_scores.title = "Scores"
+	write_score_sheet(ws_scores, db, all_filtered_charts, config, latest_filtered_mix)
 
-	mf = set(config.mixes)
-	rows_filter = []
-	for r in rows:
-		if not (r.mixes & mf):
-			continue
-		if not (r.rating.mode_full() in config.modes):
-			continue
-		d = r.rating.difficulty
-		if d == None and not config.unrated:
-			continue
-		if d != None and (d < config.diff_min or d > config.diff_max):
-			continue
+	"""
+	if config.pad:
+		for mid in config.mix_ids:
+			ws_summary = wb.create_sheet(title="Summary - %s (Pad)")
+			write_summary_sheet(ws_summary, db, mix_to_charts[mid], config, mid, True)
+	if config.keyboard:
+		for mid in config.mix_ids:
+			ws_summary = wb.create_sheet(title="Summary - %s (Kbd)")
+			write_summary_sheet(ws_summary, db, mix_to_charts[mid], config, mid, False)
+	"""
 
-		rows_filter.append(r)
-
-	write_score_sheet(ws_scores, rows_filter, config)
-
+	print("Creating data sheet...")
 	ws_dump = wb.create_sheet(title="Data")
-	write_data_sheet(ws_dump, rows_filter, config.mixes)
+	write_data_sheet(ws_dump, db, all_filtered_charts, config)
 
+	print("Creating complete data sheet...")
 	ws_dump = wb.create_sheet(title="Data (Complete)")
-	write_data_sheet(ws_dump, rows, mixes_all)
+	write_data_sheet(ws_dump, db, set(db.charts), None)
 
+	print("Creating about sheet...")
 	options = []
 	if config.pad: options += ["+Pad"]
 	if config.keyboard: options += ["+Keyboard"]
@@ -261,11 +334,11 @@ def write_rows(xlpath, rows, dbversion, config, mixes_all):
 	bold = Font(bold=True)
 	ws_marker = wb.create_sheet(title="About")
 	ws_marker.cell(row=1, column=1, value="Database Name:").font = bold
-	ws_marker.cell(row=1, column=2, value=dbversion)
+	ws_marker.cell(row=1, column=2, value=dbpath)
 	ws_marker.cell(row=2, column=1, value="Sheet Generated On:").font = bold
 	ws_marker.cell(row=2, column=2, value=str(datetime.datetime.now()))
 	ws_marker.cell(row=3, column=1, value="Generator Version:").font = bold
-	ws_marker.cell(row=3, column=2, value="v0.4")
+	ws_marker.cell(row=3, column=2, value="v0.5")
 
 	ws_marker.cell(row=5, column=1, value="Player:").font = bold
 	ws_marker.cell(row=5, column=2, value="[YOUR NAME HERE]").font = bold
@@ -279,19 +352,12 @@ def write_rows(xlpath, rows, dbversion, config, mixes_all):
 	ws_marker.cell(row=9, column=2, value="%s" % ", ".join(options))
 	
 	adjust_column_widths(ws_marker, range(1,2+1), range(1,8+1))
-	
+
+	print("Saving workbook...")
 	wb.save(xlpath)
 	wb.close()
 
-def generate_xlsx(dbpath, xlpath, config):
-	db = read_database(dbpath)
-	rows = flatten_db(db)
-	mixes_all = list(db.mixes.values())
-	mixes_all.sort(key=lambda e: e.sortOrder)
-	mixes_all = [m.title for m in mixes_all]
-	verify_config(config, mixes_all, db.modes)
-	write_rows(xlpath, rows, dbpath, config, mixes_all)
-
 if __name__ == '__main__':
+	print("Reading config file...")
 	config = parse_config("config.txt")
 	generate_xlsx(DBPATH, "output.xlsx", config)
