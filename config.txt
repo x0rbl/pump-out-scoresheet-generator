@@ -98,6 +98,8 @@ IncludeUnrated=0
 # Set IncludeKbd to 1 to include a duplicate set of score-tracking columns for
 # recording keyboard scores.  Otherwise set it to 0.
 #
+# TODO: Documentation for SortDown (not implemented yet)
 
 IncludePad=1
 IncludeKbd=0
+SortDown=1

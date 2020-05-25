@@ -17,6 +17,7 @@ class Config:
 		self.unrated = True
 		self.pad = True
 		self.keyboard = True
+		self.down = True
 		# These options need to be set manually via titles_to_ids
 		self.mix_ids = []
 		self.mode_ids = []
@@ -63,6 +64,8 @@ def parse_config(config_path):
 				config.pad = int(line[len("IncludePad="):]) != 0
 			elif line.startswith("IncludeKbd="):
 				config.keyboard = int(line[len("IncludeKbd="):]) != 0
+			elif line.startswith("SortDown="):
+				config.down = int(line[len("SortDown="):]) != 0
 			else:
 				raise ConfigError("unsupported option in [Misc] section: %s" % line)
 
@@ -100,5 +103,6 @@ def config_all(db):
 
 	config.pad = True
 	config.keyboard = True
+	config.down = True
 
 	return config

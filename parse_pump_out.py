@@ -1,37 +1,40 @@
 import sqlite3
 
+LANGUAGE = "en"
+
+OP_NONE   = 0
+OP_INSERT = 1
+OP_DELETE = 2
+OP_UPDATE = 3
+OP_EXISTS = 4
+OP_REVIVE = 5
+OP_CROSS  = 6
+
+class ParseError(Exception):
+	pass
+
 class Mix:
 	def __init__(self, mixId, mixTitle, parentId, sortOrder):
 		self.id = mixId
 		self.title = mixTitle
 		self.parent = parentId
-		self.sortOrder = sortOrder
-
-	def __str__(self):
-		return self.title
+		self.order = sortOrder
 
 class Version:
-	def __init__(self, versionId, mixTitle, versionTitle, parentId, sortOrder):
-		self.versionId = versionId
-		self.mixTitle = mixTitle
-		self.versionTitle = versionTitle
-		self.parentId = parentId
-		self.sortOrder = sortOrder
-
-	def __str__(self):
-		name = self.mixTitle
-		if self.versionTitle != "default":
-			name += " " + self.versionTitle
-		return name
+	def __init__(self, versionId, mixId, versionTitle, parentId, sortOrder):
+		self.id = versionId
+		self.mix = mixId
+		self.title = versionTitle
+		self.parent = parentId
+		self.order = sortOrder
 
 class VersionedValue:
-	def __init__(self, versions={}):
+	def __init__(self):
+		# Maps versionId -> value
 		self.values = {}
+		# A list of the version objects corresponding to the versionIds in self.values,
+		# sorted BACKWARDS by order. Or None if the cache needs to be rebuilt (use ensure_cache).
 		self.cache = None
-		self.add_versions(versions)
-
-	def add_versions(self, versions):
-		self.versions = versions
 
 	def add(self, versionId, value):
 		if versionId in self.values:
@@ -39,127 +42,49 @@ class VersionedValue:
 		self.values[versionId] = value
 		self.cache = None
 
-	def recent(self, versionId, default):
-		while True:
-			if not versionId in self.versions:
-				return default
-			if not versionId in self.values:
-				versionId = self.versions[versionId].parentId
-				continue
-			return self.values[versionId]
-
-	def at(self, versionId, default):
-		return self.at_version(versionId, default)[1]
-
-	def at_version(self, versionId, default):
-		if not versionId in self.versions:
-			return default
-		so = self.versions[versionId].sortOrder
-		self.ensure_cache()
-		for v in self.cache:
-			if v.sortOrder <= so:
-				return (v, self.values[v.versionId])
-		return (None, default)
-
-	def latest(self, default):
-		if len(self.values) == 0:
-			return default
-		self.ensure_cache()
-		return self.values[self.cache[0].versionId]
-
-	def ensure_cache(self):
+	def ensure_cache(self, versions):
 		if self.cache == None:
-			self.cache = sorted([self.versions[vid] for vid in self.values.keys()], key=lambda e: -e.sortOrder)
+			self.cache = sorted([versions[vid] for vid in self.values.keys()], key=lambda e: -e.order)
 
 class MultipleVersionedValue:
 	def __init__(self):
-		self.versions = {}
 		self.values = {}
-
-	def add_versions(self, versions):
-		self.versions = versions
-		for vv in self.values.values():
-			vv.add_versions(versions)
 
 	def add(self, versionId, operation, value):
 		if not value in self.values:
-			self.values[value] = VersionedValue(self.versions)
+			self.values[value] = VersionedValue()
 		self.values[value].add(versionId, operation)
 
-	def all(self, version):
-		res = []
-		for value, vv in self.values.items():
-			if vv.at(version, "DELETE") != "DELETE":
-				res.append(value)
-		return res
+class Mode:
+	def __init__(self, modeId, modeTitle, abbreviation, color, sortOrder, padsUsed, routine, coOp, performance):
+		self.id = modeId
+		self.title = modeTitle
+		self.abbr = abbreviation
+		self.color = color
+		self.order = sortOrder
+		self.pads = padsUsed
+		self.routine = routine
+		self.coop = coOp
+		self.performance = performance
 
-	def one(self, version, default):
-		vals = self.all(version)
-		if len(vals) > 1:
-			raise Exception("too many vals: %s" % vals)
-		if vals == []:
-			return default
-		return vals[0]
-
-	def best(self, version, default):
-		res = []
-		for value, vv in self.values.items():
-			(atver, atop) = vv.at_version(version, "DELETE")
-			if vv.at_version(version, "DELETE")[1] != "DELETE":
-				res.append((atver, value))
-
-		if len(res) == 0:
-			return default
-		temp = [(ver.sortOrder, val) for (ver,val) in res]
-		temp.sort(reverse=True)
-		return temp[0][1]
+class Cut:
+	def __init__(self, cutId, cutTitle, sortOrder):
+		self.id = cutId
+		self.title = cutTitle
+		self.order = sortOrder
 
 class Rating:
-	def __init__(self, mode='?', difficulty=None, path=None):
-		# TODO: Make a mode object and pass that instead of initializing with
-		# the abbreviation. This no longer makes sense now that we are
-		# filtering on mode names in the config.
-		self.mode = mode
+	def __init__(self, modeId=None, difficulty=None):
+		self.mode = modeId
 		self.difficulty = difficulty
-		self.path = path
-
-	def order(self, down=True):
-		seq = ['S', 'SP', 'D', 'DP', 'HDB', 'C', 'R']
-
-		if self.difficulty == None:
-			return (len(seq) + 1) ** 2
-
-		m = len(seq)
-		if self.mode in seq:
-			m = seq.index(self.mode)
-
-		d = self.difficulty * (len(seq) + 1)
-		if down:
-			d = -d
-
-		return d + m
-
-	def mode_full(self):
-		fulls = {"S":"Single", "D":"Double", "SP":"Single Performance", "DP":"Double Performance", "HDB":"Half-Double", "C":"Co-Op", "R":"Routine"}
-		return fulls.get(self.mode, self.mode)
-
-	def difficulty_str(self):
-		if self.difficulty == None:
-			return "??"
-		return "%02d" % self.difficulty
-
-	def __str__(self):
-		if self.difficulty != None:
-			return "%s%02d" % (self.mode, self.difficulty)
-		return "%s??" % self.mode
 
 class Bpm:
-	def __init__(self, low=-1.0, high=-1.0):
+	def __init__(self, low=None, high=None):
 		self.low = low
 		self.high = high
 
 	def __str__(self):
-		if self.low == self.high == -1.0:
+		if self.low == self.high == None:
 			return "NOBPM"
 		if self.low == self.high:
 			if int(self.low) == self.low:
@@ -169,15 +94,17 @@ class Bpm:
 			return "%d-%d" % (self.low, self.high)
 		return "%s-%s" % (self.low, self.high)
 
-class Stepmaker:
+class NameGroup:
 	def __init__(self):
 		self.str = ""
 		self.list = []
 
 	def add(self, prefix, name):
-		if self.str != "" and prefix != "":
-			self.str += " "
-		self.str += prefix
+		if self.str != "":
+			if prefix != "":
+				self.str += " " + prefix
+			else:
+				self.str += ","
 
 		if self.str != "" and name != "":
 			self.str += " "
@@ -188,62 +115,18 @@ class Stepmaker:
 	def __str__(self):
 		return self.str
 
-class Labels:
-	def __init__(self):
-		self.versions = {}
-		self.labels = {}
-
-	def add_versions(self, versions):
-		self.versions = versions
-		for vv in self.labels.values():
-			vv.add_versions(versions)
-
-	def add(self, versionId, operation, label):
-		if not label in self.labels:
-			self.labels[label] = VersionedValue(self.versions)
-		self.labels[label].add(versionId, operation)
-
-	def at(self, version):
-		res = []
-		for label, vv in self.labels.items():
-			if vv.at(version, "DELETE") != "DELETE":
-				res.append(label)
-		return res
-
-class Cut:
-	def __init__(self, cut="NOCUT"):
-		self.cut = cut
-
-	def order(self):
-		seq = ['Short Cut','Arcade','Remix','Full Song']
-		if self.cut in seq:
-			return seq.index(self.cut)
-		return len(seq) + 1
-
-	def __str__(self):
-		return self.cut
-
 class Song:
 	def __init__(self):
 		self.songId = -1
 		self.operations = VersionedValue()
-		self.comment = VersionedValue()
 		self.title = VersionedValue()
 		self.gameIdentifier = MultipleVersionedValue()
 		self.category = VersionedValue()
 		self.bpm = VersionedValue()
 		self.card = MultipleVersionedValue()
-		self.cut = Cut()
+		self.artist = NameGroup()
+		self.cut = -1
 		self.fallbackTitle = "NOTITLE"
-
-	def add_versions(self, versions):
-		self.operations.add_versions(versions)
-		self.comment.add_versions(versions)
-		self.title.add_versions(versions)
-		self.gameIdentifier.add_versions(versions)
-		self.category.add_versions(versions)
-		self.bpm.add_versions(versions)
-		self.card.add_versions(versions)
 
 class Chart:
 	def __init__(self):
@@ -251,85 +134,367 @@ class Chart:
 		self.songId = -1
 		self.operations = VersionedValue()
 		self.rating = VersionedValue()
-		self.stepmaker = Stepmaker()
+		self.stepmaker = NameGroup()
 		self.labels = MultipleVersionedValue()
 
-	def add_versions(self, versions):
-		self.operations.add_versions(versions)
-		self.rating.add_versions(versions)
-		self.labels.add_versions(versions)
-
 class Database:
-	def __init__(self, versions, mixes, charts, songs, modes):
-		self.versions = versions
-		self.mixes = mixes
-		self.charts = charts
-		self.songs = songs
-		self.modes = modes
-
-class Entry:
 	def __init__(self):
-		self.cid = -1
-		self.sid = -1
-		self.name = "NONAME"
-		self.rating = "NORATING"
-		self.stepmaker = Stepmaker()
-		self.labels = []
-		self.comment = ""
-		self.cut = "NOCUT"
-		self.gameIdentifier = "NOID"
-		self.category = "NOCATEGORY"
-		self.bpm = Bpm()
-		self.card = "NOCARD"
-		self.first_seen = None
-		self.last_seen = None
-		self.mixes = set()
+		self.mixes = {}
+		self.modes = {}
+		self.cuts = {}
+		self.versions = {}
+		self.charts = {}
+		self.songs = {}
+		self.ratingImages = {}
 
-	def __str__(self):
-		return "[cid=%d, sid=%d, name=%s, rating=%s, stepmaker=%s, labels=%s, comment=%s, cut=%s, gameIdentifier=%s, category=%s, bpm=%s, card=%s]" % (self.cid, self.sid, self.title, self.rating, self.stepmaker, self.labels, self.comment, self.cut, self.gameIdentifier, self.category, self.bpm, self.card)
+	# Returns the value in a VersionedValue that existed at versionId
+	# Returns default if no value is set at versionId
+	#
+	# Searching works chronologically without regard for whether the most recent update
+	# occurred in a separate branch of the version tree
+	def _vv_at(self, versionedValue, versionId, default):
+		version, value = self._vv_at_version(versionedValue, versionId, default)
+		return value
 
-def latest_version(versions):
-	if len(versions) == 0:
-		raise Exception("no versions")
-	latest = None
-	so = -1
-	for v in versions.values():
-		if v.sortOrder > so:
-			so = v.sortOrder
-			latest = v
-	return latest
+	# Returns the value in a VersionedValue that existed at versionId, along with
+	# the version id of the version that set that value: (versionId, value)
+	# Returns (None, default) if no value is set at versionId
+	#
+	# Searching works chronologically without regard for whether the most recent update
+	# occurred in a separate branch of the version tree
+	def _vv_at_version(self, versionedValue, versionId, default):
+		if not versionId in self.versions:
+			return default
+		so = self.versions[versionId].order
+		versionedValue.ensure_cache(self.versions)
+		for ver in versionedValue.cache:
+			if ver.order <= so:
+				return (ver, versionedValue.values[ver.id])
+		return (None, default)
+
+	# Returns the value in a VersionedValue, from within the same version tree, that existed
+	# at versionId
+	# Returns default if no value is set at versionId
+	def _vv_recent(self, versionedValue, versionId, default):
+		while True:
+			if not versionId in self.versions:
+				return default
+			if not versionId in versionedValue.values:
+				versionId = self.versions[versionId].parent
+				continue
+			return versionedValue.values[versionId]
+
+	# Returns the (version,value) associated with the earliest chronological value
+	# in a VersionedValue
+	# If no elements exist, returns (None, default)
+	def _vv_earliest(self, versionedValue, default):
+		if len(versionedValue.values) == 0:
+			return (None, default)
+		versionedValue.ensure_cache(self.versions)
+		ver = versionedValue.cache[-1]
+		return (ver, versionedValue.values[ver.id])
+
+	# Returns the (version,value) associated with the latest chronological value
+	# in a VersionedValue
+	# If no elements exist, returns (None, default)
+	def _vv_latest(self, versionedValue, default):
+		if len(versionedValue.values) == 0:
+			return (None, default)
+		versionedValue.ensure_cache(self.versions)
+		ver = versionedValue.cache[0]
+		return (ver, versionedValue.values[ver.id])
+
+	# Returns all values in a MultipleVersionedValue that exist at versionId
+	def _mvv_all(self, multiVersionedValue, versionId):
+		res = []
+		for value, vv in multiVersionedValue.values.items():
+			if self._vv_at(vv, versionId, OP_DELETE) != OP_DELETE:
+				res.append(value)
+		return res
+
+	# Returns the one value that exists in a MultipleVersionedValue at versionId
+	# If no value exists at versionId, return default
+	# If more than one value exists at versionId, throw an error
+	# If this function is throwing an error due to a possible problem in the data, use _mvv_best
+	def _mvv_one(self, multiVersionedValue, versionId, default):
+		vals = self._mvv_all(multiVersionedValue, versionId)
+		if len(vals) > 1:
+			raise Exception("too many vals: %s" % vals)
+		if vals == []:
+			return default
+		return vals[0]
+
+	# Similar to _mvv_one, except if multiple values exist at versionId, return the one with
+	# the newest version
+	def _mvv_best(self, multiVersionedValue, versionId, default):
+		pairs = []
+		for value, vv in multiVersionedValue.values.items():
+			(version_at, op_at) = self._vv_at_version(vv, versionId, OP_DELETE)
+			if op_at != OP_DELETE:
+				pairs.append((version_at, value))
+
+		if len(pairs) == 0:
+			return default
+		temp = [(ver.order, val) for (ver,val) in pairs]
+		temp.sort(reverse=True)
+		return temp[0][1]
+
+	def latest_version(self):
+		best_id = None
+		best_so = -1
+		for ver in self.versions.values():
+			if ver.order > best_so:
+				best_so = ver.order
+				best_id = ver.id
+		return best_id
+
+	def newest_version_from_mix(self, mixId):
+		vlist = sorted([v for v in self.versions.values()], key=lambda e: -e.order)
+		for ver in vlist:
+			if ver.mix == mixId:
+				return ver.id
+		return None
+
+	def chart_in_mix(self, chartId, mixId):
+		return self.chart_version_in_mix(chartId, mixId) != None
+
+	def chart_version_in_mix(self, chartId, mixId):
+		if not chartId in self.charts:
+			return None
+		vlist = sorted([v for v in self.versions.values()], key=lambda e: -e.order)
+		for ver in vlist:
+			if ver.mix == mixId:
+				(op, comment) = self._vv_recent(self.charts[chartId].operations, ver.id, (OP_DELETE, None))
+				if op != OP_DELETE:
+					return ver.id
+		return None
+
+	def chart_sort_key(self, chartId, versionId, down=True):
+		rating = self.chart_rating(chartId, versionId)
+		title = self.song_title(self.chart_song(chartId), versionId).lower()
+
+		mode_key = 99
+		if rating != None and rating.mode != None:
+			mt = self.modes[rating.mode].title.lower()
+			if "single" in mt:
+				mode_key = 0
+			elif "half" in mt:
+				mode_key = 2
+			elif "double" in mt:
+				mode_key = 1
+			elif "routine" in mt:
+				mode_key = 3
+			elif "co" in mt:
+				mode_key = 4
+
+		diff_key = 99
+		if rating.difficulty != None:
+			diff_key = rating.difficulty
+			if down:
+				diff_key = -diff_key
+
+		return (diff_key, mode_key, title)
+
+	def chart_rating(self, chartId, versionId):
+		if not chartId in self.charts:
+			return None
+		return self._vv_at(self.charts[chartId].rating, versionId, None)
+
+	def chart_mode(self, chartId, versionId):
+		rating = self.chart_rating(chartId, versionId)
+		if rating == None:
+			return None
+		return rating.mode
+
+	def chart_mode_str(self, chartId, versionId):
+		mode = self.chart_mode(chartId, versionId)
+		if mode == None:
+			return None
+		return self.modes[mode].title
+
+	def chart_difficulty(self, chartId, versionId):
+		rating = self.chart_rating(chartId, versionId)
+		if rating == None:
+			return None
+		return rating.difficulty
+
+	def chart_difficulty_str(self, chartId, versionId):
+		difficulty = self.chart_difficulty(chartId, versionId)
+		if difficulty == None: return "??"
+		return "%02d" % difficulty
+
+	def chart_introduced(self, chartId):
+		if not chartId in self.charts:
+			return None
+		(ver, (op, comment)) = self._vv_earliest(self.charts[chartId].operations, (OP_NONE, None))
+		if op == OP_INSERT:
+			return ver.id
+		return None
+
+	def chart_last_seen(self, chartId):
+		if not chartId in self.charts:
+			return None
+		vlist = sorted([v for v in self.versions.values()], key=lambda v: -v.order)
+		for ver in vlist:
+			(op, comment) = self._vv_recent(self.charts[chartId].operations, ver.id, (OP_DELETE, None))
+			if op != OP_DELETE:
+				return ver.id
+		return None
+
+	def chart_song(self, chartId):
+		if not chartId in self.charts:
+			return None
+		return self.charts[chartId].songId
+
+	def song_game_id(self, songId, versionId):
+		if not songId in self.songs:
+			return None
+		return self._mvv_one(self.songs[songId].gameIdentifier, versionId, None)
+
+	def chart_stepmaker(self, chartId):
+		if not chartId in self.charts:
+			return None
+		return self.charts[chartId].stepmaker
+
+	def chart_labels(self, chartId, versionId):
+		if not chartId in self.charts:
+			return []
+		return self._mvv_all(self.charts[chartId].labels, versionId)
+
+	def chart_comment(self, chartId, versionId):
+		if not chartId in self.charts:
+			return None
+		(op, comment) = self._vv_at(self.charts[chartId].comment, versionId, (OP_NONE, None))
+		return comment
+
+	def song_title(self, songId, versionId):
+		if not songId in self.songs:
+			return None
+		title = self._vv_at(self.songs[songId].title, versionId, None)
+		if title != None:
+			return title
+		return self.songs[songId].fallbackTitle
+
+	def song_cut(self, songId):
+		if not songId in self.songs:
+			return None
+		cutId = self.songs[songId].cut
+		return self.cuts.get(cutId, None)
+
+	def song_cut_str(self, songId):
+		cut = self.song_cut(songId)
+		if cut == None: return "NOCUT"
+		return cut.title
+
+	def song_bpm(self, songId, versionId):
+		if not songId in self.songs:
+			return None
+		return self._vv_at(self.songs[songId].bpm, versionId, None)
+
+	def song_bpm_str(self, songId, versionId):
+		bpm = self.song_bpm(songId, versionId)
+		if bpm == None: return "NOBPM"
+		return str(bpm)
+
+	def song_category(self, songId, versionId):
+		if not songId in self.songs:
+			return None
+		return self._vv_at(self.songs[songId].category, versionId, "NOCATEGORY")
+
+	def song_card(self, songId, versionId):
+		if not songId in self.songs:
+			return None
+		# card data seems to be bugged, so use _mvv_best instead of _mvv_one
+		return self._mvv_best(self.songs[songId].card, versionId, "NOCARD")
+
+	def song_comment(self, songId, versionId):
+		if not songId in self.songs:
+			return None
+		(op, comment) = self._vv_at(self.songs[songId].operations, versionId, (OP_NONE, None))
+		return comment
+
+	def version_title(self, versionId):
+		if not versionId in self.versions:
+			return None
+		mixId = self.versions[versionId].mix
+		return "%s %s" % (self.mixes[mixId].title, self.versions[versionId].title)
 
 def read_database(dbpath):
 	conn = sqlite3.connect(dbpath)
 	c = conn.cursor()
 
-	# Get mix tree
+	db = Database()
+
 	c.execute('''
 		SELECT
-			mix.mixId,
-			mix.internalTitle,
-			mix.parentMixId,
-			mix.sortOrder
+			operationId,
+			internalTitle
+		FROM operation
+	''')
+	results = c.fetchall()
+	expect = [
+		(OP_INSERT, "INSERT"),
+		(OP_DELETE, "DELETE"),
+		(OP_UPDATE, "UPDATE"),
+		(OP_EXISTS, "EXISTS"),
+		(OP_REVIVE, "REVIVE"),
+		(OP_CROSS,  "CROSS"),
+	]
+	if results != expect:
+		raise ParseError("incompatible operations list")
+
+	# Get mixes
+	c.execute('''
+		SELECT
+			mixId,
+			internalTitle,
+			parentMixId,
+			sortOrder
 		FROM mix
 	''')
-	mixes = {}
 	for mixId, mixTitle, parentId, sortOrder in c.fetchall():
-		mixes[mixId] = Mix(mixId, mixTitle, parentId, sortOrder)
+		db.mixes[mixId] = Mix(mixId, mixTitle, parentId, sortOrder)
 
-	### Get version tree
+	# Get modes
 	c.execute('''
 		SELECT
-			version.versionId,
-			mix.internalTitle,
-			version.internalTitle,
-			version.parentVersionId,
-			version.sortOrder
-		FROM version
-		JOIN mix ON version.mixId = mix.mixId
+			modeId,
+			internalTitle,
+			internalAbbreviation,
+			internalHexColor,
+			sortOrder,
+			padsUsed,
+			routine,
+			coOp,
+			performance
+		FROM mode
 	''')
-	versions = {}
-	for versionId, mixTitle, versionTitle, parentId, sortOrder in c.fetchall():
-		versions[versionId] = Version(versionId, mixTitle, versionTitle, parentId, sortOrder)
+	for modeId, title, abbreviation, color, sortOrder, padsUsed, routine, coOp, performance in c.fetchall():
+		db.modes[modeId] = Mode(modeId, title, abbreviation, color, sortOrder, padsUsed, routine, coOp, performance)
+
+	# Get cuts
+	c.execute('''
+		SELECT
+			cutId,
+			internalTitle,
+			sortOrder
+		FROM cut
+	''')
+	for cutId, cutTitle, sortOrder in c.fetchall():
+		db.cuts[cutId] = Cut(cutId, cutTitle, sortOrder)
+
+	### Get versions
+	c.execute('''
+		SELECT
+			versionId,
+			mixId,
+			internalTitle,
+			parentVersionId,
+			sortOrder
+		FROM version
+	''')
+	for versionId, mixId, versionTitle, parentId, sortOrder in c.fetchall():
+		db.versions[versionId] = Version(versionId, mixId, versionTitle, parentId, sortOrder)
 
 	### Populate charts by version
 	c.execute('''
@@ -337,37 +502,43 @@ def read_database(dbpath):
 			chartVersion.chartId,
 			chart.songId,
 			chartVersion.versionId,
-			operation.internalTitle
+			chartVersion.operationId,
+			chartVersion.internalDescription
 		FROM chartVersion
 		JOIN chart ON chart.chartId = chartVersion.chartId
-		JOIN operation ON chartVersion.operationId = operation.operationId
 	''')
-	charts = {}
-	for chartId, songId, versionId, operation in c.fetchall():
-		if not chartId in charts:
-			ch = Chart()
-			ch.chartId = chartId
-			ch.songId = songId
-			ch.add_versions(versions)
-			charts[chartId] = ch
-		charts[chartId].operations.add(versionId, operation)
+	for chartId, songId, versionId, operationId, comment in c.fetchall():
+		if not chartId in db.charts:
+			db.charts[chartId] = Chart()
+			db.charts[chartId].chartId = chartId
+			db.charts[chartId].songId = songId
+		db.charts[chartId].operations.add(versionId, (operationId, comment))
 
 	### Get chart ratings
 	c.execute('''
 		SELECT
 			chartRatingVersion.chartId,
 			chartRatingversion.versionId,
-			mode.internalAbbreviation,
-			difficulty.value,
-			rating.path
+			chartRating.modeId,
+			difficulty.value
 		FROM chartRatingVersion
 		JOIN chartRating on chartRatingVersion.chartRatingId = chartRating.chartRatingId
 		JOIN difficulty ON chartRating.difficultyId = difficulty.difficultyId
-		JOIN mode ON chartRating.modeId = mode.modeId
-		JOIN rating ON chartRating.modeId = rating.modeId AND chartRating.difficultyId = rating.difficultyId
 	''')
-	for chartId, versionId, mode, difficulty, path in c.fetchall():
-		charts[chartId].rating.add(versionId, Rating(mode, difficulty, path))
+	for chartId, versionId, mode, difficulty in c.fetchall():
+		db.charts[chartId].rating.add(versionId, Rating(mode, difficulty))
+
+	### Get rating paths
+	c.execute('''
+		SELECT
+			rating.modeId,
+			difficulty.value,
+			rating.path
+		FROM rating
+		JOIN difficulty ON difficulty.difficultyId = rating.difficultyId
+	''')
+	for modeId, difficulty, path in c.fetchall():
+		db.ratingImages[(modeId, difficulty)] = path
 
 	### Get chart stepmakers
 	c.execute('''
@@ -378,49 +549,44 @@ def read_database(dbpath):
 			chartStepmaker.sortOrder
 		FROM chartStepmaker
 		JOIN stepmaker ON chartStepmaker.stepmakerId = stepmaker.stepmakerId
-		ORDER BY chartId ASC, chartStepmaker.sortOrder ASC
+		ORDER BY chartStepmaker.chartId ASC, chartStepmaker.sortOrder ASC
 	''')
 	for chartId, prefix, stepmaker, _ in c.fetchall():
-		charts[chartId].stepmaker.add(prefix, stepmaker)
+		db.charts[chartId].stepmaker.add(prefix, stepmaker)
 
 	### Get chart labels
 	c.execute('''
 		SELECT
 			chartLabel.chartId,
 			chartLabelVersion.versionId,
-			operation.internalTitle,
+			chartLabelVersion.operationId,
 			label.internalTitle
 		FROM chartLabelVersion
 		JOIN chartLabel ON chartLabelVersion.chartLabelId = chartLabel.chartLabelId
 		JOIN label ON chartLabel.labelId = label.labelId
-		JOIN operation ON chartLabelVersion.operationId = operation.operationId
 	''')
-	for chartId, versionId, operation, label in c.fetchall():
-		charts[chartId].labels.add(versionId, operation, label)
+	for chartId, versionId, operationId, label in c.fetchall():
+		db.charts[chartId].labels.add(versionId, operationId, label)
 
 	### Create songs by version, with cut (Full Song, Remix, etc) and fallback title
 	c.execute('''
 		SELECT
 			songVersion.songId,
 			songVersion.versionId,
-			operation.internalTitle,
+			songVersion.operationId,
 			songVersion.internalDescription,
-			cut.internalTitle,
+			song.cutId,
 			song.internalTitle
 		FROM songVersion
 		JOIN song ON songVersion.songId = song.songId
-		JOIN operation ON songVersion.operationId = operation.operationId
-		JOIN cut ON song.cutId = cut.cutId
 	''')
-	songs = {}
-	for songId, versionId, operation, comment, cut, fallbackTitle in c.fetchall():
-		if not songId in songs:
-			songs[songId] = Song()
-			songs[songId].songId = songId
-			songs[songId].add_versions(versions)
-		songs[songId].comment.add(versionId, (operation, comment))
-		songs[songId].cut = Cut(cut)
-		songs[songId].fallbackTitle = fallbackTitle
+	for songId, versionId, operationId, comment, cutId, fallbackTitle in c.fetchall():
+		if not songId in db.songs:
+			db.songs[songId] = Song()
+			db.songs[songId].songId = songId
+		db.songs[songId].operations.add(versionId, (operationId, comment))
+		db.songs[songId].cut = cutId
+		db.songs[songId].fallbackTitle = fallbackTitle
 
 	### Get song titles
 	c.execute('''
@@ -432,10 +598,10 @@ def read_database(dbpath):
 		JOIN songTitle ON songTitleVersion.songTitleId = songTitle.songTitleId
 		AND songTitleVersion.languageId = songTitle.languageId
 		JOIN language ON songTitle.languageId = language.languageId
-		WHERE language.code = "en"
-	''')
+		WHERE language.code = "%s"
+	''' % LANGUAGE)
 	for songId, versionId, title in c.fetchall():
-		songs[songId].title.add(versionId, title)
+		db.songs[songId].title.add(versionId, title)
 
 	### Get official song identifiers
 	c.execute('''
@@ -443,13 +609,12 @@ def read_database(dbpath):
 			songGameIdentifier.songId,
 			songGameIdentifier.gameIdentifier,
 			songGameIdentifierVersion.versionId,
-			operation.internalTitle
+			songGameIdentifierVersion.operationId
 		FROM songGameIdentifierVersion
 		JOIN songGameIdentifier ON songGameIdentifierVersion.songGameIdentifierId = songGameIdentifier.songGameIdentifierId
-		JOIN operation ON songGameIdentifierVersion.operationId = operation.operationId
 	''')
-	for songId, gameIdentifier, versionId, operation in c.fetchall():
-		songs[songId].gameIdentifier.add(versionId, operation, gameIdentifier)
+	for songId, gameIdentifier, versionId, operationId in c.fetchall():
+		db.songs[songId].gameIdentifier.add(versionId, operationId, gameIdentifier)
 
 	### Get song categories (K-Pop, World Music, etc)
 	c.execute('''
@@ -462,7 +627,7 @@ def read_database(dbpath):
 		JOIN category ON songCategory.categoryId = category.categoryId
 	''')
 	for songId, category, versionId in c.fetchall():
-		songs[songId].category.add(versionId, category)
+		db.songs[songId].category.add(versionId, category)
 
 	### Get song BPM info
 	c.execute('''
@@ -475,7 +640,21 @@ def read_database(dbpath):
 		JOIN songBpm ON songBpmVersion.songBpmId = songBpm.songBpmId
 	''')
 	for songId, versionId, bpmMin, bpmMax in c.fetchall():
-		songs[songId].bpm.add(versionId, Bpm(bpmMin, bpmMax))
+		db.songs[songId].bpm.add(versionId, Bpm(bpmMin, bpmMax))
+
+	### Get song artists
+	c.execute('''
+		SELECT
+			songArtist.songId,
+			songArtist.prefix,
+			artist.internalTitle,
+			songArtist.sortOrder
+		FROM songArtist
+		JOIN artist ON songArtist.artistId = artist.artistId
+		ORDER BY songArtist.songId ASC, songArtist.sortOrder ASC
+	''')
+	for songId, prefix, artist, _ in c.fetchall():
+		db.songs[songId].artist.add(prefix, artist)
 
 	### Get song graphics
 	c.execute('''
@@ -483,65 +662,11 @@ def read_database(dbpath):
 			songCard.songId,
 			songCard.path,
 			songCardVersion.versionId,
-			operation.internalTitle
+			songCardVersion.operationId
 		FROM songCardVersion
 		JOIN songCard ON songCardVersion.songCardId = songCard.songCardId
-		JOIN operation ON songCardVersion.operationId = operation.operationId
 	''')
-	for songId, path, versionId, operation in c.fetchall():
-		songs[songId].card.add(versionId, operation, path)
+	for songId, path, versionId, operationId in c.fetchall():
+		db.songs[songId].card.add(versionId, operationId, path)
 
-	### Get list of mode names
-	c.execute('''
-		SELECT mode.internalTitle
-		FROM mode
-	''')
-	modes = set()
-	for mode in c.fetchall():
-		modes.add(mode[0])
-
-	return Database(versions, mixes, charts, songs, modes)
-
-def make_entry(db, chart):
-	e = Entry()
-	e.cid = chart.chartId
-	e.sid = chart.songId
-	#print("**** FOR DEBUGGING: CID=%d, SID=%d ****" % (e.cid,e.sid))
-	e.stepmaker = chart.stepmaker
-	e.cut = db.songs[e.sid].cut
-
-	# This needs to be refactored
-	e.first_seen = None
-	e.last_seen = None
-	vlist = sorted([v for v in db.versions.values()], key=lambda v: v.sortOrder)
-	for v in vlist:
-		op = chart.operations.recent(v.versionId, "DELETE")
-		if op != "DELETE":
-			e.mixes.add(v.mixTitle)
-			if op == "INSERT" and e.first_seen == None:
-				e.first_seen = v
-			e.last_seen = v
-
-	ver = e.last_seen.versionId
-
-	e.rating = chart.rating.at(ver, Rating())
-	e.comment = db.songs[e.sid].comment.at(ver, ("", None))[1]
-	e.gameIdentifier = db.songs[e.sid].gameIdentifier.one(ver, "NOID")
-	e.category = db.songs[e.sid].category.at(ver, "NOCATEGORY")
-	e.bpm = db.songs[e.sid].bpm.at(ver, Bpm())
-	e.card = db.songs[e.sid].card.best(ver, "NOCARD")
-	e.labels = chart.labels.all(ver)
-	e.title = db.songs[e.sid].title.at(ver, "NONAME")
-	if e.title == "NONAME":
-		e.title = db.songs[e.sid].fallbackTitle
-
-	return e
-
-def flatten_db(db, down=True):
-	rows = []
-	for chart in db.charts.values():
-		e = make_entry(db, chart)
-		rows.append(e)
-
-	rows.sort(key=lambda e: (e.rating.order(down), e.cut.order(), e.title.lower()))
-	return rows
+	return db
