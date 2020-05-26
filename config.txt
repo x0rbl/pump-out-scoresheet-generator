@@ -13,7 +13,9 @@
 # hash character (#).
 #
 # In most cases you will probably only want to have one mix uncommented unless
-# you regularly play more than one mix.
+# you regularly play more than one mix.  At the time of writing, the Pump Out
+# database does not fully support older mixes, so anything before Fiesta 2 is
+# not recommended.
 #
 # Do NOT change the spelling or punctuation of the mixes, as they must exactly
 # match the mix titles in the Pump Out database (column `mix.internalTitle`).

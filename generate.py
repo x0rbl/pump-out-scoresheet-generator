@@ -11,6 +11,7 @@ from openpyxl.styles.differential import DifferentialStyle
 from openpyxl.utils import get_column_letter as gcl
 
 import datetime
+import re
 import sys
 
 ###### PUT THE PATH OF YOUR DATABASE HERE #####
@@ -25,6 +26,18 @@ def adjust_column_widths(ws, cols, rows):
 			if val == None: continue
 			width = max(width, len(str(val)))
 		ws.column_dimensions[gcl(c)].width = width + 1
+
+def add_border(ws, row, column, left=None, right=None, bottom=None, top=None):
+	old = ws.cell(row=row, column=column).border
+	if left == None:
+		left = old.left
+	if right == None:
+		right = old.right
+	if bottom == None:
+		bottom = old.bottom
+	if top == None:
+		top = old.top
+	ws.cell(row=row, column=column).border = Border(left=left, right=right, bottom=bottom, top=top, diagonal=old.diagonal, diagonal_direction=old.diagonal_direction, vertical=old.vertical, horizontal=old.horizontal)
 
 def write_data_sheet(ws, db, chart_set, config):
 	if chart_set == None:
@@ -184,10 +197,6 @@ def write_score_sheet(ws, db, chart_set, config, mixId):
 		for j, mid in enumerate(mixes):
 			ws.cell(row=i+2, column=mix_col+j, value="NY"[db.chart_in_mix(cid, mid)]).fill = gray
 
-	# TODO: This is not the horizontal style I want
-	for i in range(len(charts)):
-		ws.cell(row=i+2, column=9).alignment = Alignment(horizontal='fill')
-
 	for c in range(len(headers)):
 		for r in range(len(charts)):
 			right = None
@@ -262,7 +271,9 @@ def write_score_sheet(ws, db, chart_set, config, mixId):
 
 def write_summary_sheet(ws, db, chart_set, config, mixId, pad):
 	table_names = ["Single + Single Performance", "Double + Double Performance", "Half-Double", "Routine", "Co-Op"]
-	table_colors = ["ff2222", "22dd22", "cc0088", "44ccff", "ffdd00"]
+	table_colors = ["ff2211", "11dd22", "cc0066", "23a98d", "f2c219"]
+	table_headers = ["Passed", "Failed", "Unplayed", "SSS", "SS", "S", "A", "B", "C", "D", "F", "Low Miss", "High Miss", "Avg Miss"]
+	gray = PatternFill("solid", fgColor="eeece1")
 
 	def difficulty_sort_key(d):
 		if d == None:
@@ -338,7 +349,6 @@ def write_summary_sheet(ws, db, chart_set, config, mixId, pad):
 		if last_mode != -1:
 			# Finish writing the previous row
 			if last_diff != diff or last_mode != mode:
-				# TODO: Borders, Alignment, Formatting on Avg
 				end_row = r+1
 				ws.cell(row=main_row-1, column=2,  value='=COUNTIF(T%d:T%d, "Y")' % (start_row, end_row))
 				ws.cell(row=main_row-1, column=3,  value='=COUNTIF(T%d:T%d, "N")' % (start_row, end_row))
@@ -357,46 +367,57 @@ def write_summary_sheet(ws, db, chart_set, config, mixId, pad):
 
 			# Finish the table
 			if last_mode != mode:
-				# TODO: Borders
+				for i in range(15):
+					add_border(ws, main_row-1, i+1, bottom=Side(style="medium"))
 				main_row += 1
 
 		# If this is a new entry...
 		if mode != None:
 			# Draw the header of a new table
 			if last_mode != mode:
-				# TODO: Color, Merge, Center, Bold, Borders
-				ws.cell(row=main_row,   column=1, value=table_names[mode])
-				ws.cell(row=main_row+1, column=2, value="Passed") # Merge this into array thing
-				ws.cell(row=main_row+1, column=3, value="Failed")
-				ws.cell(row=main_row+1, column=4, value="Unplayed")
-				ws.cell(row=main_row+1, column=5, value="SSS")
-				ws.cell(row=main_row+1, column=6, value="SS")
-				ws.cell(row=main_row+1, column=7, value="S")
-				ws.cell(row=main_row+1, column=8, value="A")
-				ws.cell(row=main_row+1, column=9, value="B")
-				ws.cell(row=main_row+1, column=10, value="C")
-				ws.cell(row=main_row+1, column=11, value="D")
-				ws.cell(row=main_row+1, column=12, value="F")
-				ws.cell(row=main_row+1, column=13, value="Low Miss")
-				ws.cell(row=main_row+1, column=14, value="High Miss")
-				ws.cell(row=main_row+1, column=15, value="Avg Miss")
+				ws.merge_cells("A%d:O%d" % (main_row, main_row))
+				ws.cell(row=main_row, column=1, value=table_names[mode])
+				ws.cell(row=main_row, column=1).alignment = Alignment(horizontal='center')
+				ws.cell(row=main_row, column=1).font = Font(bold=True)
+				ws.cell(row=main_row, column=1).fill = PatternFill("solid", fgColor=table_colors[mode])
+				for i, header in enumerate(table_headers):
+					ws.cell(row=main_row+1, column=i+2, value=header)
+					ws.cell(row=main_row+1, column=i+2).alignment = Alignment(horizontal='center')
+					ws.cell(row=main_row+1, column=i+2).font = Font(bold=True)
+					ws.cell(row=main_row+1, column=i+2).fill = gray
+				for i in range(15):
+					add_border(ws, main_row,   i+1, top=Side(style="medium"))
+					add_border(ws, main_row+1, i+1, top=Side(style="thin"), bottom=Side(style="thin"))
+				add_border(ws, main_row,   1, left=Side(style="medium"), right=Side(style="medium"))
+				add_border(ws, main_row+1, 1, left=Side(style="medium"), right=Side(style="thin"))
+				add_border(ws, main_row+1, 4, right=Side(style="thin"))
+				add_border(ws, main_row+1, 12, right=Side(style="thin"))
+				add_border(ws, main_row,   15, right=Side(style="medium"))
+				add_border(ws, main_row+1, 15, right=Side(style="medium"))
 				main_row += 2
 
 			# Draw the next row
 			if last_mode != mode or last_diff != diff:
-				# TODO: Color, Borders
 				ws.cell(row=main_row, column=1, value=difficulty_name(diff))
+				ws.cell(row=main_row, column=1).font = Font(bold=True)
+				ws.cell(row=main_row, column=1).fill = gray
+				add_border(ws, main_row, 1, right=Side(style="thin"), left=Side(style="medium"))
+				add_border(ws, main_row, 4, right=Side(style="thin"))
+				add_border(ws, main_row, 12, right=Side(style="thin"))
+				add_border(ws, main_row, 15, right=Side(style="medium"))
+				for i in range(15):
+					ws.cell(row=main_row, column=i+1).alignment = Alignment(horizontal='center')
 				start_row = r+2
 				main_row += 1
 
 		(last_mode, last_diff) = (mode, diff)
 
-	# TODO: Set borders
-	# TODO: Hide rows Q-V
-
-	widths = [3, 6, 6, 8, 3, 3, 3, 3, 3, 3, 3, 3, 8, 9, 8, 8, 5, 2, 3, 4, 5, 4]
+	widths = [3, 7, 7, 9, 4, 4, 4, 4, 4, 4, 4, 4, 9, 10, 9, 8, 5, 2, 3, 5, 6, 5]
 	for i, w in enumerate(widths):
 		ws.column_dimensions[gcl(i+1)].width = w
+
+	for col in "QRSTUV":
+		ws.column_dimensions[col].hidden = True
 
 def generate_xlsx(dbpath, xlpath, config):
 	print("Reading database file...")
@@ -413,7 +434,7 @@ def generate_xlsx(dbpath, xlpath, config):
 			ver = db.chart_version_in_mix(cid, mid)
 			if ver != None:
 				rating = db.chart_rating(cid, ver)
-				if rating.mode in config.mode_ids:
+				if rating != None and rating.mode in config.mode_ids:
 					diff = rating.difficulty
 					if diff == None and config.unrated:
 						charts.add(cid)
@@ -443,16 +464,18 @@ def generate_xlsx(dbpath, xlpath, config):
 	ws_scores.title = "Scores"
 	write_score_sheet(ws_scores, db, all_filtered_charts, config, latest_filtered_mix)
 
-	if config.pad:
+	INVALID_TITLE_REGEX = re.compile(r'[\\*?:/\[\]]')
+	for ispad in (True, False):
+		if ispad == True and not config.pad: continue
+		if ispad == False and not config.keyboard: continue
+		short_name = ("Kbd","Pad")[ispad]
 		for mid in config.mix_ids:
-			print("Creating summary sheet (Pad, %s)..." % db.mixes[mid].title)
-			ws_summary = wb.create_sheet(title=("Summary (Pad) %s" % db.mixes[mid].title)[:31])
-			write_summary_sheet(ws_summary, db, mix_to_charts[mid], config, mid, True)
-	if config.keyboard:
-		for mid in config.mix_ids:
-			print("Creating summary sheet (Kbd, %s)..." % db.mixes[mid].title)
-			ws_summary = wb.create_sheet(title=("Summary (Kbd) %s" % db.mixes[mid].title)[:31])
-			write_summary_sheet(ws_summary, db, mix_to_charts[mid], config, mid, False)
+			print("Creating summary sheet (%s, %s)..." % (short_name, db.mixes[mid].title))
+			tab_title = "Summary (%s) %s" % (short_name, db.mixes[mid].title)
+			tab_title = INVALID_TITLE_REGEX.sub("", tab_title)
+			tab_title = tab_title[:31]
+			ws_summary = wb.create_sheet(title=tab_title)
+			write_summary_sheet(ws_summary, db, mix_to_charts[mid], config, mid, ispad)
 
 	print("Creating data sheet...")
 	ws_dump = wb.create_sheet(title="Data")
