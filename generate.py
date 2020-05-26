@@ -317,19 +317,22 @@ def write_summary_sheet(ws, db, chart_set, config, mixId, pad):
 	ws.cell(row=1, column=22, value="Miss")
 
 	last_mode = last_diff = -1
+	start_row = end_row = -1
 	main_row = 1
-	cur_row = -1
+
+	score_col = 6
+	if not pad and config.pad:
+		score_col = 10
 
 	for r, (mode, _, diff, cid) in enumerate(table):
 		# Add an entry to the hidden lookup table
 		if mode != None:
-			# TODO: Pull from the correct columns in the score sheet (whether pad or keyboard)
 			ws.cell(row=r+2, column=17, value=cid)
 			ws.cell(row=r+2, column=18, value=mode)
 			ws.cell(row=r+2, column=19, value=difficulty_name(diff))
-			ws.cell(row=r+2, column=20, value='=IF(VLOOKUP(Q%d, Scores!$A$2:$M$9999, 6, FALSE)="", "", UPPER(VLOOKUP(Q%d, Scores!$A$2:$M$9999, 6, FALSE)))' % (r+2, r+2))
-			ws.cell(row=r+2, column=21, value='=IF(VLOOKUP(Q%d, Scores!$A$2:$M$9999, 7, FALSE)="", "", UPPER(VLOOKUP(Q%d, Scores!$A$2:$M$9999, 7, FALSE)))' % (r+2, r+2))
-			ws.cell(row=r+2, column=22, value='=IF(VLOOKUP(Q%d, Scores!$A$2:$M$9999, 8, FALSE)="", "", VLOOKUP(Q%d, Scores!$A$2:$M$9999, 8, FALSE))' % (r+2, r+2))
+			ws.cell(row=r+2, column=20, value='=IF(VLOOKUP(Q%d, Scores!$A$2:$M$9999, %d, FALSE)="", "", UPPER(VLOOKUP(Q%d, Scores!$A$2:$M$9999, %d, FALSE)))' % (r+2, score_col+0, r+2, score_col+0))
+			ws.cell(row=r+2, column=21, value='=IF(VLOOKUP(Q%d, Scores!$A$2:$M$9999, %d, FALSE)="", "", UPPER(VLOOKUP(Q%d, Scores!$A$2:$M$9999, %d, FALSE)))' % (r+2, score_col+1, r+2, score_col+1))
+			ws.cell(row=r+2, column=22, value='=IF(VLOOKUP(Q%d, Scores!$A$2:$M$9999, %d, FALSE)="", "", VLOOKUP(Q%d, Scores!$A$2:$M$9999, %d, FALSE))' % (r+2, score_col+2, r+2, score_col+2))
 
 		# If there is a previous row...
 		if last_mode != -1:
@@ -348,9 +351,9 @@ def write_summary_sheet(ws, db, chart_set, config, mixId, pad):
 				ws.cell(row=main_row-1, column=10, value='=IF(COUNTIF(U%d:U%d, "C")<>0,COUNTIF(U%d:U%d, "C"),"")' % (start_row, end_row, start_row, end_row))
 				ws.cell(row=main_row-1, column=11, value='=IF(COUNTIF(U%d:U%d, "D")<>0,COUNTIF(U%d:U%d, "D"),"")' % (start_row, end_row, start_row, end_row))
 				ws.cell(row=main_row-1, column=12, value='=IF(COUNTIF(U%d:U%d, "F")<>0,COUNTIF(U%d:U%d, "F"),"")' % (start_row, end_row, start_row, end_row))
-				ws.cell(row=main_row-1, column=13, value='=IF(ISNUMBER(V%d:V%d),MIN(V%d:V%d),"")' % (start_row, end_row, start_row, end_row))
-				ws.cell(row=main_row-1, column=14, value='=IF(ISNUMBER(V%d:V%d),MAX(V%d:V%d),"")' % (start_row, end_row, start_row, end_row))
-				ws.cell(row=main_row-1, column=15, value='=IF(ISNUMBER(V%d:V%d),AVERAGE(V%d:V%d),"")' % (start_row, end_row, start_row, end_row))
+				ws.cell(row=main_row-1, column=13, value='=IF(SUMPRODUCT(--(V%d:V%d<>""))=0,"",MIN(V%d:V%d))' % (start_row, end_row, start_row, end_row))
+				ws.cell(row=main_row-1, column=14, value='=IF(SUMPRODUCT(--(V%d:V%d<>""))=0,"",MAX(V%d:V%d))' % (start_row, end_row, start_row, end_row))
+				ws.cell(row=main_row-1, column=15, value='=IF(SUMPRODUCT(--(V%d:V%d<>""))=0,"",AVERAGE(V%d:V%d))' % (start_row, end_row, start_row, end_row))
 
 			# Finish the table
 			if last_mode != mode:
