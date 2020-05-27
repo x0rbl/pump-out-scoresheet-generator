@@ -54,7 +54,7 @@ def write_data_sheet(ws, db, chart_set, config):
 	fver = db.newest_version_from_mix(latest_filtered_mix)
 
 	charts = list(chart_set)
-	charts.sort(key=lambda cid: db.chart_sort_key(cid, fver, down=True))
+	charts.sort(key=lambda cid: db.chart_sort_key(cid, fver, down=config.down))
 
 	headers = [
 		"CID", # A
@@ -141,7 +141,7 @@ def write_score_sheet(ws, db, chart_set, config, mixId):
 	fver = db.newest_version_from_mix(latest_filtered_mix)
 
 	charts = list(chart_set)
-	charts.sort(key=lambda cid: db.chart_sort_key(cid, fver, down=True))
+	charts.sort(key=lambda cid: db.chart_sort_key(cid, fver, down=config.down))
 
 	mixes = config.mix_ids
 	if len(mixes) == 1:
@@ -314,11 +314,6 @@ def write_summary_sheet(ws, db, chart_set, config, mixId, pad):
 
 	table.sort()
 	table.append((None, None, None, None))
-
-	side_left = {}
-	side_down = {}
-	side_right = {}
-	side_up = {}
 
 	ws.cell(row=1, column=17, value="CID")
 	ws.cell(row=1, column=18, value="T")
