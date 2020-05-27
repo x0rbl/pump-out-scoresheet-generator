@@ -1,0 +1,6 @@
+*.pyc
+*.db
+~$*.xlsx
+/output.xlsx
+/__pycache__
+/ignore
