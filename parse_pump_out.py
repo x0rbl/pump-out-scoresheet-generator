@@ -32,8 +32,8 @@ class VersionedValue:
 	def __init__(self):
 		# Maps versionId -> value
 		self.values = {}
-		# A list of the version objects corresponding to the versionIds in self.values,
-		# sorted BACKWARDS by order. Or None if the cache needs to be rebuilt (use ensure_cache).
+		# A list of the versionIds in self.values, sorted BACKWARDS by order.
+		# Or None if the cache needs to be rebuilt (use ensure_cache).
 		self.cache = None
 
 	def add(self, versionId, value):
@@ -44,7 +44,11 @@ class VersionedValue:
 
 	def ensure_cache(self, versions):
 		if self.cache == None:
-			self.cache = sorted([versions[vid] for vid in self.values.keys()], key=lambda e: -e.order)
+			self.cache = sorted([vid for vid in self.values], key=lambda e: -versions[e].order)
+
+	def get_list(self, versions):
+		self.ensure_cache(versions)
+		return [(v, self.values[v]) for v in self.cache]
 
 class MultipleVersionedValue:
 	def __init__(self):
@@ -168,8 +172,8 @@ class Database:
 		so = self.versions[versionId].order
 		versionedValue.ensure_cache(self.versions)
 		for ver in versionedValue.cache:
-			if ver.order <= so:
-				return (ver, versionedValue.values[ver.id])
+			if self.versions[ver].order <= so:
+				return (ver, versionedValue.values[ver])
 		return (None, default)
 
 	# Returns the value in a VersionedValue, from within the same version tree, that existed
@@ -184,7 +188,7 @@ class Database:
 				continue
 			return versionedValue.values[versionId]
 
-	# Returns the (version,value) associated with the earliest chronological value
+	# Returns the (versionId,value) associated with the earliest chronological value
 	# in a VersionedValue
 	# If no elements exist, returns (None, default)
 	def _vv_earliest(self, versionedValue, default):
@@ -192,9 +196,9 @@ class Database:
 			return (None, default)
 		versionedValue.ensure_cache(self.versions)
 		ver = versionedValue.cache[-1]
-		return (ver, versionedValue.values[ver.id])
+		return (ver, versionedValue.values[ver])
 
-	# Returns the (version,value) associated with the latest chronological value
+	# Returns the (versionId,value) associated with the latest chronological value
 	# in a VersionedValue
 	# If no elements exist, returns (None, default)
 	def _vv_latest(self, versionedValue, default):
@@ -202,7 +206,7 @@ class Database:
 			return (None, default)
 		versionedValue.ensure_cache(self.versions)
 		ver = versionedValue.cache[0]
-		return (ver, versionedValue.values[ver.id])
+		return (ver, versionedValue.values[id])
 
 	# Returns all values in a MultipleVersionedValue that exist at versionId
 	def _mvv_all(self, multiVersionedValue, versionId):
@@ -235,9 +239,15 @@ class Database:
 
 		if len(pairs) == 0:
 			return default
-		temp = [(ver.order, val) for (ver,val) in pairs]
-		temp.sort(reverse=True)
-		return temp[0][1]
+
+		best_so = -1
+		best_val = None
+		for (ver,val) in pairs:
+			so = self.versions[ver].order
+			if so > best_so:
+				best_so = so
+				best_val = val
+		return val
 
 	def latest_version(self):
 		best_id = None
@@ -300,6 +310,21 @@ class Database:
 			return None
 		return self._vv_at(self.charts[chartId].rating, versionId, None)
 
+	def chart_rating_sequence_str(self, chartId, changes_only=False):
+		ratings = self.charts[chartId].rating.get_list(self.versions)[::-1]
+
+		elems = []
+		for i in range(len(ratings)):
+			(v,r) = ratings[i]
+			rs = self.rating_str(r)
+			if len(elems) == 0 or elems[-1] != rs:
+				elems.append(rs)
+
+		if changes_only and len(elems) <= 1:
+			return ""
+
+		return " -> ".join(elems)
+
 	def chart_mode(self, chartId, versionId):
 		rating = self.chart_rating(chartId, versionId)
 		if rating == None:
@@ -328,7 +353,7 @@ class Database:
 			return None
 		(ver, (op, comment)) = self._vv_earliest(self.charts[chartId].operations, (OP_NONE, None))
 		if op == OP_INSERT:
-			return ver.id
+			return ver
 		return None
 
 	def chart_last_seen(self, chartId):
@@ -418,6 +443,17 @@ class Database:
 			return None
 		mixId = self.versions[versionId].mix
 		return "%s %s" % (self.mixes[mixId].title, self.versions[versionId].title)
+
+	def rating_str(self, rating):
+		if rating == None:
+			return "???"
+		m = "?"
+		if rating.mode != None:
+			m = self.modes[rating.mode].abbr
+		d = "??"
+		if rating.difficulty != None:
+			d = "%02d" % rating.difficulty
+		return m+d
 
 def read_database(dbpath):
 	conn = sqlite3.connect(dbpath)

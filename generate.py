@@ -169,6 +169,7 @@ def write_score_sheet(ws, db, chart_set, config, mixId):
 			"Comment (Kbd)"  # I M
 		]
 	headers += [db.mixes[m].title for m in mixes] # F J N
+	headers += ["History"]
 	bold = Font(bold=True)
 	gray = PatternFill("solid", fgColor="EEEEEE")
 	dgray = PatternFill("solid", fgColor="CCCCCC")
@@ -196,6 +197,7 @@ def write_score_sheet(ws, db, chart_set, config, mixId):
 		ws.cell(row=i+2, column=5, value="=VLOOKUP(A%d, 'Data (Complete)'!A1:O9999, 7, FALSE)" % (i+2)).fill = gray
 		for j, mid in enumerate(mixes):
 			ws.cell(row=i+2, column=mix_col+j, value="NY"[db.chart_in_mix(cid, mid)]).fill = gray
+		ws.cell(row=i+2, column=mix_col+len(mixes), value=db.chart_rating_sequence_str(cid, changes_only=True)).fill = gray
 
 	for c in range(len(headers)):
 		for r in range(len(charts)):
@@ -204,7 +206,7 @@ def write_score_sheet(ws, db, chart_set, config, mixId):
 				right = Side(style="thin")
 			if c+1 in border_cols:
 				right = Side(style="thick")
-			border = Border(bottom=Side(style="thin", color="888888"), right=right)
+			border = Border(bottom=Side(style="thin", color="777777"), right=right)
 			ws.cell(row=r+2, column=c+1).border = border
 
 	ws.column_dimensions['A'].width = 5
@@ -227,6 +229,8 @@ def write_score_sheet(ws, db, chart_set, config, mixId):
 		c += 4
 	for i in range(len(mixes)):
 		ws.column_dimensions[gcl(c+i)].width = 2
+	c += len(mixes)
+	ws.column_dimensions[gcl(c)].width = 10 #24
 
 	green = PatternFill("solid", bgColor="44FF44")
 	red = PatternFill("solid", bgColor="FF4444")
