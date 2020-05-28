@@ -10,13 +10,11 @@ from openpyxl.styles.borders import Border, Side
 from openpyxl.styles.differential import DifferentialStyle
 from openpyxl.utils import get_column_letter as gcl
 
+import argparse
 import datetime
+import os
 import re
 import sys
-
-###### PUT THE PATH OF YOUR DATABASE HERE #####
-DBPATH = 'pumpout-2020-05-03-22-18-1588558611155.db'
-###### PUT THE PATH OF YOUR DATABASE HERE #####
 
 def adjust_column_widths(ws, cols, rows):
 	for c in cols:
@@ -418,7 +416,10 @@ def write_summary_sheet(ws, db, chart_set, config, mixId, pad):
 	for col in "QRSTUV":
 		ws.column_dimensions[col].hidden = True
 
-def generate_xlsx(dbpath, xlpath, config):
+def generate_xlsx(dbpath, outpath, configpath, frompath):
+	print("Reading config file...")
+	config = parse_config(configpath)
+
 	print("Reading database file...")
 	db = read_database(dbpath)
 
@@ -514,10 +515,41 @@ def generate_xlsx(dbpath, xlpath, config):
 	adjust_column_widths(ws_marker, range(1,2+1), range(1,10+1))
 
 	print("Saving workbook...")
-	wb.save(xlpath)
+	wb.save(outpath)
 	wb.close()
 
+def generate(dbpath, outpath, configpath, frompath, overwrite):
+	print("Database Path:   %s" % dbpath)
+	print("Output Path:     %s%s" % (outpath, (""," (Overwrite)")[overwrite]))
+	print("Config Path:     %s" % configpath)
+	print("Old Scores Path: %s" % ("(None specified)",frompath)[frompath != None])
+	print("")
+
+	if not os.path.isfile(dbpath):
+		print("ERROR: Database does not exist at %s" % dbpath)
+		return
+	if not overwrite and os.path.exists(outpath):
+		print("ERROR: Output path %s already exists (force write with --overwrite)" % outpath)
+		return
+	if not os.path.isfile(configpath):
+		print("ERROR: Config file does not exist at %s" % configpath)
+		return
+	if frompath and not os.path.isfile(frompath):
+		print("ERROR: Scores path %s does not exist" % frompath)
+		return
+	if frompath == outpath:
+		print("ERROR: Output path and old scores path cannot be equal")
+		return
+
+	generate_xlsx(dbpath, outpath, configpath, frompath)
+
 if __name__ == '__main__':
-	print("Reading config file...")
-	config = parse_config("config.txt")
-	generate_xlsx(DBPATH, "output.xlsx", config)
+	parser = argparse.ArgumentParser(description="Create an XLSX spreadsheet for recording PIU scores.")
+	parser.add_argument("db", type=str, help="The path of the Pump Out database")
+	parser.add_argument("out", type=str, help="The path of the spreadsheet to create")
+	parser.add_argument("--from", type=str, dest="frompath", help="The optional path of a previous spreadsheet from which to copy scores to the new one")
+	parser.add_argument("--config", type=str, default="config.txt", help="The path of the configuration file (default: config.txt)")
+	parser.add_argument("--overwrite", action="store_true", help="Overwrite the output path if it already exists (default: off)")
+	args = parser.parse_args()
+	generate(args.db, args.out, args.config, args.frompath, args.overwrite)
+

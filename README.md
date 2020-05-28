@@ -2,18 +2,43 @@
 
 This script extracts data from the [Pump Out](https://pumpout.anyhowstep.com/) project and organizes it into an XLSX spreadsheet, which can be used for score tracking.
 
+## Dependencies
+
 To use this script, you will need:
 
 1. [Python 3](https://www.python.org/downloads/)
 1. The [openpyxl](https://openpyxl.readthedocs.io/en/stable/) library (`python3 -m pip install openpyxl`)
-1. A copy of the latest Pump Out database from, available [here](https://github.com/AnyhowStep/pump-out-sqlite3-dump/tree/master/dump)
+1. A copy of the latest Pump Out database, available [here](https://github.com/AnyhowStep/pump-out-sqlite3-dump/tree/master/dump)
 
-Then do the following:
+## Simple instructions
 
-1. Copy the database to the directory with the script
-1. Make sure the `DBPATH = '...'` line at the top of `generate.py` matches the filename of the database dump
-1. Open `config.txt` and follow the (short) instructions to set the options; save the file when done
-1. Run `python3 generate.py`
-1. You should now have a new score sheet named `output.xlsx`
+To create a new score sheet (`scores.xlsx`):
 
-To quickly find the rows you want to update, you can use the filtering features of your spreadsheet editor to only show the modes and difficulties that you are interested in.
+1. Open `config.txt` and follow the instructions to set the options; save the file when done
+1. Run `python3 generate.py <path of database> scores.xlsx`
+
+Later on, when the Pump Out database is updated with new songs or bugfixes, you will want to regenerate your score sheet.  Use the following to create a new score sheet (`newscores.xlsx`) pre-populated with your existing scores<sup>1</sup>:
+
+`python3 generate.py <path of database> newscores.xlsx --from scores.xlsx`
+
+<sup>1</sup> _(Not implemented yet)_
+
+## Command-line options
+
+`python3 <db> <out> [--from <from>] [--config <config>] [--overwrite]`
+
+* `db`: The path of the Pump Out database
+* `out`: The path to write the spreadsheet to
+* `from`: The path of another spreadsheet containing
+* `config`: The path of the configuration file (defalts to `config.txt`)
+* `overwrite`: If specified, allow an existing score sheet to be overwritten
+
+## Configuration options
+
+`config.txt` allows you to configure the following aspects of the generated spreadsheet:
+
+* Which mixes to include
+* Which modes to include
+* Which difficulties to include
+* Whether to track scores for pad, keyboard, or both
+* Whether to sort difficulties high-to-low or low-to-high
