@@ -17,11 +17,9 @@ To create a new score sheet (`scores.xlsx`):
 1. Open `config.txt` and follow the instructions to set the options; save the file when done
 1. Run `python3 generate.py <path of database> scores.xlsx`
 
-Later on, when the Pump Out database is updated with new songs or bugfixes, you will want to regenerate your score sheet.  Use the following to create a new score sheet (`newscores.xlsx`) pre-populated with your existing scores<sup>1</sup>:
+Later on, when the Pump Out database is updated with new songs or bugfixes, you will want to regenerate your score sheet.  Use the following to create a new score sheet (`newscores.xlsx`) pre-populated with your existing scores:
 
 `python3 generate.py <path of database> newscores.xlsx --from scores.xlsx`
-
-<sup>1</sup> _(Not implemented yet)_
 
 ## Command-line options
 

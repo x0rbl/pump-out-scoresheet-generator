@@ -2,6 +2,7 @@ from parse_pump_out import read_database
 from parse_config import parse_config, titles_to_ids, config_all
 
 from openpyxl import Workbook
+from openpyxl import load_workbook
 from openpyxl.drawing.image import Image
 from openpyxl.formatting.rule import CellIsRule, FormulaRule, Rule
 from openpyxl.styles import Font, PatternFill
@@ -25,6 +26,15 @@ def adjust_column_widths(ws, cols, rows):
 			width = max(width, len(str(val)))
 		ws.column_dimensions[gcl(c)].width = width + 1
 
+def get_latest_filtered_mix(db, mixes):
+	latest = -1
+	for mid in mixes:
+		if latest == -1:
+			latest = mid
+		elif db.mixes[mid].order > db.mixes[latest].order:
+			latest = mid
+	return latest
+
 def add_border(ws, row, column, left=None, right=None, bottom=None, top=None):
 	old = ws.cell(row=row, column=column).border
 	if left == None:
@@ -43,13 +53,8 @@ def write_data_sheet(ws, db, chart_set, config):
 	if config == None:
 		config = config_all(db)
 
-	latest_filtered_mix = -1
-	for mid in config.mix_ids:
-		if latest_filtered_mix == -1:
-			latest_filtered_mix = mid
-		elif db.mixes[mid].order > db.mixes[latest_filtered_mix].order:
-			latest_filtered_mix = mid
-	fver = db.newest_version_from_mix(latest_filtered_mix)
+	fmix = get_latest_filtered_mix(db, config.mix_ids)
+	fver = db.newest_version_from_mix(fmix)
 
 	charts = list(chart_set)
 	charts.sort(key=lambda cid: db.chart_sort_key(cid, fver, down=config.down))
@@ -129,13 +134,8 @@ def write_data_sheet(ws, db, chart_set, config):
 
 	ws.freeze_panes = 'A2'
 
-def write_score_sheet(ws, db, chart_set, config, mixId):
-	latest_filtered_mix = -1
-	for mid in config.mix_ids:
-		if latest_filtered_mix == -1:
-			latest_filtered_mix = mid
-		elif db.mixes[mid].order > db.mixes[latest_filtered_mix].order:
-			latest_filtered_mix = mid
+def write_score_sheet(ws, db, chart_set, config, scores):
+	latest_filtered_mix = get_latest_filtered_mix(db, config.mix_ids)
 	fver = db.newest_version_from_mix(latest_filtered_mix)
 
 	charts = list(chart_set)
@@ -153,6 +153,7 @@ def write_score_sheet(ws, db, chart_set, config, mixId):
 		"Difficulty",    # E
 	]
 	if config.pad:
+		col_pad = len(headers) + 1
 		headers += [
 			"Passed (Pad)",  # F
 			"Grade (Pad)",   # G
@@ -160,26 +161,30 @@ def write_score_sheet(ws, db, chart_set, config, mixId):
 			"Comment (Pad)", # I
 		]
 	if config.keyboard:
+		col_kbd = len(headers) + 1
 		headers += [
 			"Passed (Kbd)",  # F J
 			"Grade (Kbd)",   # G K
 			"Miss (Kbd)",    # H L
 			"Comment (Kbd)"  # I M
 		]
+	col_mix = len(headers) + 1
 	headers += [db.mixes[m].title for m in mixes] # F J N
+	col_hist = len(headers) + 1
 	headers += ["History"]
+
 	bold = Font(bold=True)
 	gray = PatternFill("solid", fgColor="EEEEEE")
 	dgray = PatternFill("solid", fgColor="CCCCCC")
 
-	mix_col = 6
 	border_cols = [5]
 	if config.pad or config.keyboard:
-		mix_col = 10
 		border_cols += [9]
 	if config.pad and config.keyboard:
-		mix_col = 14
 		border_cols += [13]
+
+	if scores:
+		scores_left = set(scores)
 
 	for i in range(len(headers)):
 		right = None
@@ -187,15 +192,37 @@ def write_score_sheet(ws, db, chart_set, config, mixId):
 		c.font = bold
 		c.fill = dgray
 		c.border = Border(bottom=Side(style="thick"), right=right)
+
 	for i, cid in enumerate(charts):
 		ws.cell(row=i+2, column=1, value=cid).fill = dgray
 		ws.cell(row=i+2, column=2, value="=VLOOKUP(A%d, 'Data (Complete)'!A1:O9999, 4, FALSE)" % (i+2)).fill = gray
 		ws.cell(row=i+2, column=3, value="=VLOOKUP(A%d, 'Data (Complete)'!A1:O9999, 5, FALSE)" % (i+2)).fill = gray
 		ws.cell(row=i+2, column=4, value="=VLOOKUP(A%d, 'Data (Complete)'!A1:O9999, 6, FALSE)" % (i+2)).fill = gray
 		ws.cell(row=i+2, column=5, value="=VLOOKUP(A%d, 'Data (Complete)'!A1:O9999, 7, FALSE)" % (i+2)).fill = gray
+
 		for j, mid in enumerate(mixes):
-			ws.cell(row=i+2, column=mix_col+j, value="NY"[db.chart_in_mix(cid, mid)]).fill = gray
-		ws.cell(row=i+2, column=mix_col+len(mixes), value=db.chart_rating_sequence_str(cid, changes_only=True)).fill = gray
+			ws.cell(row=i+2, column=col_mix+j, value="NY"[db.chart_in_mix(cid, mid)]).fill = gray
+		ws.cell(row=i+2, column=col_mix+len(mixes), value=db.chart_rating_sequence_str(cid, changes_only=True)).fill = gray
+
+		if scores:
+			if config.pad:
+				key = (cid, True)
+				if key in scores:
+					s = scores[key]
+					ws.cell(row=i+2, column=col_pad+0, value=s.passed)
+					ws.cell(row=i+2, column=col_pad+1, value=s.grade)
+					ws.cell(row=i+2, column=col_pad+2, value=s.miss)
+					ws.cell(row=i+2, column=col_pad+3, value=s.comment)
+					scores_left.remove(key)
+			if config.keyboard:
+				key = (cid, False)
+				if key in scores:
+					s = scores[key]
+					ws.cell(row=i+2, column=col_kbd+0, value=s.passed)
+					ws.cell(row=i+2, column=col_kbd+1, value=s.grade)
+					ws.cell(row=i+2, column=col_kbd+2, value=s.miss)
+					ws.cell(row=i+2, column=col_kbd+3, value=s.comment)
+					scores_left.remove(key)
 
 	for c in range(len(headers)):
 		for r in range(len(charts)):
@@ -270,6 +297,30 @@ def write_score_sheet(ws, db, chart_set, config, mixId):
 		ws.conditional_formatting.add('K2:K9999', CellIsRule(operator='equal', formula=['"F"'], fill=grade_f))
 
 	ws.freeze_panes = 'C2'
+
+	if scores:
+		lver = db.latest_version()
+		for s in scores_left:
+			title = None
+			rstr = None
+
+			sid = db.chart_song(scores[s].cid)
+			if sid:
+				title = db.song_title(sid, lver)
+			if title == None:
+				title = "[Unknown Title]"
+
+			rating = db.chart_rating(scores[s].cid, lver)
+			if rating:
+				rstr = db.rating_str(rating)
+			if rstr == None or rstr == "???":
+				rstr = "[Unknown Rating]"
+
+			etype = "*keyboard*"
+			if s[1]:
+				etype = "*pad*"
+
+			print("WARNING: New sheet does not contain a %s entry for CID=%d: %s %s" % (etype, scores[s].cid, title, rstr))
 
 def write_summary_sheet(ws, db, chart_set, config, mixId, pad):
 	table_names = ["Single + Single Performance", "Double + Double Performance", "Half-Double", "Routine", "Co-Op"]
@@ -416,6 +467,76 @@ def write_summary_sheet(ws, db, chart_set, config, mixId, pad):
 	for col in "QRSTUV":
 		ws.column_dimensions[col].hidden = True
 
+class Score:
+	def __init__(self, cid, pad, passed, grade, miss, comment):
+		self.cid = cid
+		self.pad = pad
+		self.passed = passed
+		self.grade = grade
+		self.miss = miss
+		self.comment = comment
+
+	def empty(self):
+		return not self.passed and not self.grade and not self.miss and not self.comment
+
+def read_scores(frompath):
+	wb = load_workbook(filename=frompath)
+	if not "Scores" in wb.sheetnames:
+		raise Exception("Old scores spreadsheet doesn't contain a sheet named 'Scores'. Did you rename it?")
+	ws = wb["Scores"]
+
+	pad_headers = ["Passed (Pad)", "Grade (Pad)", "Miss (Pad)", "Comment (Pad)"]
+	kbd_headers = ["Passed (Kbd)", "Grade (Kbd)", "Miss (Kbd)", "Comment (Kbd)"]
+	pad_cols = {}
+	kbd_cols = {}
+	cid_col = None
+
+	for c in range(1, ws.max_column+1):
+		val = ws.cell(row=1, column=c).value
+		if val in pad_headers:
+			i = pad_headers.index(val)
+			pad_cols[i] = c
+		if val in kbd_headers:
+			i = kbd_headers.index(val)
+			kbd_cols[i] = c
+		if val == "CID":
+			cid_col = c
+
+	if c == None:
+		raise Exception("Old 'Scores' sheet doesn't contain a column named 'CID'. Did you rename it?")
+
+	if pad_cols:
+		for i in range(4):
+			if not i in pad_cols:
+				print("WARNING: Pad scores available but column '%s' is missing" % pad_headers[i])
+	if kbd_cols:
+		for i in range(4):
+			if not i in kbd_cols:
+				print("WARNING: Keyboard scores available but column '%s' is missing" % kbd_headers[i])
+
+	scores = {}
+	for r in range(2, ws.max_row+1):
+		cid = ws.cell(row=r, column=cid_col).value
+		if pad_cols:
+			passed = grade = miss = comment = None
+			if 0 in pad_cols: passed  = ws.cell(row=r, column=pad_cols[0]).value
+			if 1 in pad_cols: grade   = ws.cell(row=r, column=pad_cols[1]).value
+			if 2 in pad_cols: miss    = ws.cell(row=r, column=pad_cols[2]).value
+			if 3 in pad_cols: comment = ws.cell(row=r, column=pad_cols[3]).value
+			s = Score(cid, True, passed, grade, miss, comment)
+			if not s.empty():
+				scores[(cid, True)] = s
+		if kbd_cols:
+			passed = grade = miss = comment = None
+			if 0 in kbd_cols: passed  = ws.cell(row=r, column=kbd_cols[0]).value
+			if 1 in kbd_cols: grade   = ws.cell(row=r, column=kbd_cols[1]).value
+			if 2 in kbd_cols: miss    = ws.cell(row=r, column=kbd_cols[2]).value
+			if 3 in kbd_cols: comment = ws.cell(row=r, column=kbd_cols[3]).value
+			s = Score(cid, False, passed, grade, miss, comment)
+			if not s.empty():
+				scores[(cid, False)] = s
+	return scores
+
 def generate_xlsx(dbpath, outpath, configpath, frompath):
 	print("Reading config file...")
 	config = parse_config(configpath)
@@ -445,24 +566,16 @@ def generate_xlsx(dbpath, outpath, configpath, frompath):
 		mix_to_charts[mid] = charts
 		all_filtered_charts |= charts
 
-	latest_filtered_mix = -1
-	latest_mix = -1
-	for mid in db.mixes:
-		if latest_mix == -1:
-			latest_mix = mid
-		elif db.mixes[mid].order > db.mixes[latest_mix].order:
-			latest_mix = mid
-	for mid in config.mix_ids:
-		if latest_filtered_mix == -1:
-			latest_filtered_mix = mid
-		elif db.mixes[mid].order > db.mixes[latest_filtered_mix].order:
-			latest_filtered_mix = mid
+	scores = None
+	if frompath:
+		print("Reading old scores...")
+		scores = read_scores(frompath)
 
 	print("Creating score sheet...")
 	wb = Workbook()
 	ws_scores = wb.active
 	ws_scores.title = "Scores"
-	write_score_sheet(ws_scores, db, all_filtered_charts, config, latest_filtered_mix)
+	write_score_sheet(ws_scores, db, all_filtered_charts, config, scores)
 
 	INVALID_TITLE_REGEX = re.compile(r'[\\*?:/\[\]]')
 	for ispad in (True, False):
